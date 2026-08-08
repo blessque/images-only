@@ -3,9 +3,19 @@
  * The two run in different runtimes; a value import compiles and then fails at the edge.
  */
 
-export type SizeClass = 'big' | 'medium' | 'small';
+/**
+ * SOLO takes a whole row on its own, at any aspect ratio. WIDE and MEDIUM share rows and
+ * differ only in how much of one they ask for.
+ *
+ * This replaced big/medium/small, which promised a SIZE the grid could not deliver: within
+ * a row every image shares a height, so widths are locked to aspect ratios — a "big"
+ * portrait beside a "small" landscape came out NARROWER than the small one. `solo` is the
+ * honest way to make something prominent, and it is named for what it actually does.
+ * See docs/decisions/TUNING_LOG.md.
+ */
+export type SizeClass = 'solo' | 'wide' | 'medium';
 
-export const SIZE_CLASSES: readonly SizeClass[] = ['big', 'medium', 'small'];
+export const SIZE_CLASSES: readonly SizeClass[] = ['solo', 'wide', 'medium'];
 
 export interface ImageItem {
   id: string;

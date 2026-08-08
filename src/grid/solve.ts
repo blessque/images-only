@@ -122,6 +122,34 @@ export function solve(
   let i = 0;
 
   while (i < items.length) {
+    const first = items[i];
+    if (!first) break;
+
+    // ── SOLO ────────────────────────────────────────────────────────────────
+    // A solo image takes the whole row on its own, at whatever height its aspect ratio
+    // produces, and is EXEMPT from the height clamp.
+    //
+    // The exemption is the whole point. Without it the clamp recruits a neighbour for any
+    // solo image taller than the ceiling — and then equal heights lock widths to aspect
+    // ratios, so a "prominent" portrait renders NARROWER than the wide photo beside it.
+    // That is exactly what the old `big` class did, and why it was replaced.
+    //
+    // Unlike the last-row case, being tall here is an explicit choice the user made on
+    // this specific photograph, not a silent degradation — so it is honoured literally.
+    if (first.sizeClass === 'solo') {
+      i += 1;
+      rows.push(
+        layoutRow(
+          [first],
+          containerWidth,
+          rowHeight([first], containerWidth),
+          i >= items.length,
+          Infinity, // never flagged overheight: tall is what was asked for
+        ),
+      );
+      continue;
+    }
+
     const row: ImageItem[] = [];
     let sumFraction = 0;
 
@@ -129,10 +157,12 @@ export function solve(
     // Always take at least one image, then keep adding while doing so lands the row
     // CLOSER to full. That single rule also subsumes "stop at Σf ≥ 1": once the sum
     // reaches 1, adding anything can only increase the distance. It is what stops a
-    // `big` image being dragged into a row that is already three-quarters full.
+    // `wide` image being dragged into a row that is already three-quarters full.
     while (i < items.length) {
       const item = items[i];
       if (!item) break;
+      // A solo image never joins a row in progress — it starts the next one.
+      if (item.sizeClass === 'solo') break;
 
       const fraction = params.fractions[item.sizeClass];
       if (row.length > 0) {
@@ -154,7 +184,8 @@ export function solve(
 
     while (height > params.maxRowHeight && i < items.length) {
       const next = items[i];
-      if (!next) break;
+      // Never conscript a solo image to fix another row's height — it must start its own.
+      if (!next || next.sizeClass === 'solo') break;
       row.push(next);
       i += 1;
       height = rowHeight(row, containerWidth);

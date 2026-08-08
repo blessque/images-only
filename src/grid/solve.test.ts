@@ -33,7 +33,7 @@ function params(over: Partial<SolveParams> = {}): SolveParams {
 
 /** Every invariant the grid promises, asserted together. */
 function expectInvariants(rows: SolvedRow[], containerWidth: number, p: SolveParams) {
-  for (const row of rows) {
+  for (const [rowIndex, row] of rows.entries()) {
     // 1. FILLS EXACTLY — integer widths summing to the container, no gap, no overflow.
     const sum = row.images.reduce((acc, i) => acc + i.width, 0);
     expect(sum).toBe(containerWidth);
@@ -47,11 +47,23 @@ function expectInvariants(rows: SolvedRow[], containerWidth: number, p: SolvePar
       expect(solved.height).toBeGreaterThan(0);
     }
 
-    // 3. HEIGHT CLAMP — non-final rows must sit inside the band. The final row is
-    //    exempt by design: gap and crop are both hard-rule violations, so tall is the
-    //    only option left.
-    if (!row.isLast) {
-      expect(row.height).toBeLessThanOrEqual(Math.ceil(p.maxRowHeight));
+    // 3. HEIGHT CLAMP — non-final rows must sit inside the band. Two exemptions, both
+    //    deliberate: the FINAL row (gap and crop are hard-rule violations, so tall is the
+    //    only option left), and any SOLO row — being tall is precisely what solo means,
+    //    and enforcing the ceiling there is what made the old `big` class render narrower
+    //    than the `small` beside it.
+    const isSolo = row.images.length === 1 && row.images[0]?.item.sizeClass === 'solo';
+
+    if (!row.isLast && !isSolo) {
+      // The ceiling is reachable only by ADDING an image, and a solo image is not
+      // available for that — it must start its own row. So a shared row may exceed the
+      // ceiling when the only candidate next in line is solo. Same shape as the
+      // minRowHeight floor below: a goal, not a guarantee, and the honest assertion is
+      // that the solver breaches it only when it provably could not do better.
+      const nextIsSolo = rows[rowIndex + 1]?.images[0]?.item.sizeClass === 'solo';
+      if (!nextIsSolo) {
+        expect(row.height).toBeLessThanOrEqual(Math.ceil(p.maxRowHeight));
+      }
 
       // The floor is only reachable by REMOVING images, so it is not an absolute
       // guarantee — a lone panorama in a 320px container genuinely is 107px tall. The
@@ -99,7 +111,7 @@ describe('solve — core invariants', () => {
       img(
         [A.panorama, A.wide, A.landscape, A.classic, A.square, A.portrait, A.tall, A.phone][n % 8] ??
           A.square,
-        (['big', 'medium', 'small', 'medium'] as const)[n % 4] ?? 'medium',
+        (['solo', 'wide', 'medium', 'wide'] as const)[n % 4] ?? 'medium',
       ),
     );
 
@@ -115,19 +127,39 @@ describe('solve — core invariants', () => {
 });
 
 describe('solve — size class controls density', () => {
-  it('gives a big landscape image a row to itself on desktop', () => {
-    const items = [img(A.landscape, 'big'), img(A.landscape, 'small'), img(A.landscape, 'small')];
+  it('gives a solo image a row to itself on desktop', () => {
+    const items = [img(A.landscape, 'solo'), img(A.landscape, 'medium'), img(A.landscape, 'medium')];
     const rows = solve(items, 1440, params({ fractions: fractionsFor(1440) }));
 
-    // This is the ONLY mechanism the grid has for hierarchy: within a row, equal heights
-    // lock widths to aspect ratios, so "big" can only mean "alone".
     expect(rows[0]?.images).toHaveLength(1);
-    expect(rows[0]?.images[0]?.item.sizeClass).toBe('big');
+    expect(rows[0]?.images[0]?.item.sizeClass).toBe('solo');
     expect(rows[0]?.images[0]?.width).toBe(1440);
   });
 
-  it('pairs big images on wide screens', () => {
-    const items = [img(A.landscape, 'big'), img(A.landscape, 'big')];
+  it('keeps a solo image alone even when it is TALLER than the clamp', () => {
+    // The bug that produced this class: a near-square image alone at 1440 solves to
+    // ~1440px, the clamp recruited a neighbour, and then equal heights made the
+    // "prominent" image render NARROWER than the wide photo beside it.
+    const items = [img(A.tall, 'solo'), img(A.panorama, 'medium')];
+    const rows = solve(items, 1440, params({ maxRowHeight: 900 }));
+
+    expect(rows[0]?.images).toHaveLength(1);
+    expect(rows[0]?.images[0]?.width).toBe(1440);
+    expect(rows[0]?.height).toBeGreaterThan(900);
+  });
+
+  it('never conscripts a solo image to fix another row’s height', () => {
+    const items = [img(A.phone, 'medium'), img(A.landscape, 'solo'), img(A.landscape, 'medium')];
+    const rows = solve(items, 1440, params({ maxRowHeight: 900 }));
+
+    // Row 0 is too tall and would love a neighbour, but the next image is solo.
+    expect(rows[0]?.images).toHaveLength(1);
+    expect(rows[1]?.images).toHaveLength(1);
+    expect(rows[1]?.images[0]?.item.sizeClass).toBe('solo');
+  });
+
+  it('pairs wide images on wide screens', () => {
+    const items = [img(A.landscape, 'wide'), img(A.landscape, 'wide')];
     const rows = solve(items, 2560, params({ fractions: fractionsFor(2560) }));
 
     expect(rows).toHaveLength(1);
@@ -136,8 +168,8 @@ describe('solve — size class controls density', () => {
 
   it('puts exactly one image per row on mobile, whatever the class', () => {
     const items = [
-      img(A.landscape, 'big'), img(A.tall, 'small'),
-      img(A.square, 'medium'), img(A.wide, 'small'),
+      img(A.landscape, 'solo'), img(A.tall, 'medium'),
+      img(A.square, 'medium'), img(A.wide, 'wide'),
     ];
     const p = params({ fractions: fractionsFor(390), maxRowHeight: 10_000 });
     const rows = solve(items, 390, p);
@@ -161,7 +193,7 @@ describe('solve — the height clamp works by membership, not by cropping', () =
   });
 
   it('pushes an image out of a row that would be too short', () => {
-    const items = Array.from({ length: 12 }, () => img(A.panorama, 'small'));
+    const items = Array.from({ length: 12 }, () => img(A.panorama, 'medium'));
     const p = params({ minRowHeight: 200, maxRowHeight: 1120 });
     const rows = solve(items, 1440, p);
 

@@ -11,25 +11,26 @@ export interface Breakpoint {
   /** Applies from this container width upward. */
   minWidth: number;
   /**
-   * Target share of a row each size class wants.
+   * Target share of a row each class asks for.
    *
    * These control ROW DENSITY, not size. Within a row every image shares a height, so
    * widths are locked to aspect ratios — two same-aspect images render identically wide
-   * regardless of class. Hierarchy comes from being ALONE in a row, which is why `big`
-   * is 1/1 on desktop.
+   * whatever their class. Real hierarchy comes only from being ALONE in a row, which is
+   * what `solo` is for; `solo` is handled by the solver directly, not by this fraction.
    */
   fractions: Record<SizeClass, number>;
 }
 
 export const BREAKPOINTS: readonly Breakpoint[] = [
-  // Mobile is NOT a separate code path — it is this row collapsing every class to 1/1,
+  // Mobile is NOT a separate code path — it is this row collapsing everything to 1/1,
   // which produces the one-image-per-row feel the brief asked for.
-  { minWidth: 0, fractions: { big: 1, medium: 1, small: 1 } },
-  { minWidth: 641, fractions: { big: 1, medium: 1 / 2, small: 1 / 2 } },
-  { minWidth: 1025, fractions: { big: 1, medium: 1 / 2, small: 1 / 3 } },
-  // Wide: `big` drops to 1/2 so two large images share a row. Past ~1800px a single
-  // full-width image stops being a portfolio plate and becomes a billboard.
-  { minWidth: 1801, fractions: { big: 1 / 2, medium: 1 / 3, small: 1 / 4 } },
+  { minWidth: 0, fractions: { solo: 1, wide: 1, medium: 1 } },
+  { minWidth: 641, fractions: { solo: 1, wide: 1, medium: 1 / 2 } },
+  { minWidth: 1025, fractions: { solo: 1, wide: 1 / 2, medium: 1 / 3 } },
+  // Past ~1800px images stop needing to grow and the gallery benefits from density, so
+  // `medium` tightens. `wide` stays at a half — that is the "two large images per row"
+  // the brief asked for on a 2560 display.
+  { minWidth: 1801, fractions: { solo: 1, wide: 1 / 2, medium: 1 / 4 } },
 ];
 
 /**
@@ -62,7 +63,7 @@ export function fractionsFor(containerWidth: number): Record<SizeClass, number> 
     if (containerWidth >= bp.minWidth) chosen = bp;
   }
   // BREAKPOINTS is a non-empty literal, but noUncheckedIndexedAccess cannot know that.
-  return chosen ? chosen.fractions : { big: 1, medium: 1, small: 1 };
+  return chosen ? chosen.fractions : { solo: 1, wide: 1, medium: 1 };
 }
 
 export function maxRowHeightFor(viewportHeight: number): number {

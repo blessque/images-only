@@ -89,9 +89,12 @@ export function Grid({ items, base }: GridProps) {
   // The first two break hard rules, so it is tall — and the honest fix is to tell him
   // where he can act on it, rather than silently degrade the one promise the site makes.
   const lastRow = rows[rows.length - 1];
+  const lastIsSolo = lastRow?.images.length === 1 && lastRow.images[0]?.item.sizeClass === 'solo';
   const tooTall =
     adminActive === true &&
     lastRow !== undefined &&
+    // A solo row is tall on purpose — nagging about a choice the user just made is noise.
+    !lastIsSolo &&
     lastRow.height > maxRowHeightFor(viewportHeight) * LAST_ROW_WARN_FACTOR;
 
   return (

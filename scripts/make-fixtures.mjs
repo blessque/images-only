@@ -37,7 +37,7 @@ const ASPECTS = [
   { label: '9:16', aspect: 9 / 16 },
 ];
 
-const CLASSES = ['big', 'medium', 'small', 'medium', 'small', 'small'];
+const CLASSES = ['solo', 'wide', 'medium', 'wide', 'medium', 'medium'];
 
 // Muted, desaturated pairs — an are.na-ish register rather than a colour-test chart, so
 // tuning row heights by eye is not fought by garish fixtures.

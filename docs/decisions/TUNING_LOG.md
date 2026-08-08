@@ -345,11 +345,60 @@ test meant the test was wrong.
 
 ---
 
+## Decisions made — 2026-08-09 (iteration 8: solo/wide/medium, from real photographs)
+
+### `big`/`medium`/`small` REPLACED by `solo`/`wide`/`medium`
+The user hit the documented failure in his own work: a `big` image rendered NARROWER than
+the `small` beside it. The mechanism, now understood precisely — `big` *was* 1/1, so it
+should have been alone, but a near-square image alone at 1440px solves to ~1440px tall,
+which exceeds `MAX_ROW_HEIGHT` (1.4 × viewport ≈ 1260px). The clamp recruited a neighbour,
+and equal heights then locked widths to aspect ratios. **The height clamp was silently
+cancelling the only hierarchy mechanism the grid had.**
+
+His proposal, adopted: `solo` takes a whole row at any aspect ratio and is **exempt from
+the clamp**; everything else shares. The exemption is the fix — without it the clamp
+recruits a neighbour again and we are straight back here. It is a legitimate exemption
+where the last row's was not: solo is an explicit per-photograph choice, not a silent
+degradation, so being tall is honoured literally and never warned about.
+
+The naming is also more honest than mine. "Big" promised a size the grid could not deliver;
+"solo" promises to be alone, which is exactly what it does. He dropped `narrow` as
+unnecessary — three classes, not four.
+
+### Two rules the solver enforces directly, not through fractions
+A solo image never joins a row in progress, and is never conscripted to fix another row's
+height. The second means a shared row **can** exceed the ceiling when the only candidate
+next in line is solo — a goal-not-guarantee, the same shape as the `minRowHeight` floor,
+and the sweep test now asserts the weaker true property instead of the convenient false one.
+
+### The tray drags to reorder; arrows got bigger
+Only the HANDLE is draggable, not the whole row — making the `<li>` draggable breaks text
+selection in the alt input inside it, so you drag the row when you meant to select a word.
+The drop target is an insertion RULE rather than a reflowing gap: the tray is a fixed list,
+and a line reads more clearly than every row shifting under the cursor.
+
+### Renaming classes shipped with a MIGRATION, not a reset
+`worker/migrations/001-solo-wide-medium.sql` rebuilds the table (SQLite cannot alter a CHECK
+constraint in place) mapping big→solo, medium→wide, small→medium. Verified on the user's
+own 17 uploaded photographs: 6/3/8 became 6 solo / 3 wide / 8 medium with the R2 objects
+untouched. Nothing is deployed yet, so this existed purely to save him re-uploading — but
+it is the pattern every future schema change must follow.
+
+### `verify:worker` locks the rate limiter, so `verify:all` clears it between suites
+The worker suite ends by deliberately tripping the login limiter; the admin suite then
+could not log in and timed out on `.admin-bar`. A test-ordering artefact, not a product
+bug, but it cost a confusing red run — `npm run login:reset` now sits between them.
+
+---
+
 ## Open issues
 
-- **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `big` fraction (1/2) are still taste dials**
-  tuned against synthetic fixtures, not against his photographs. First real upload session
-  should settle both; record the verdict here.
+- **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `medium` fraction (1/4) are still taste
+  dials** tuned against synthetic fixtures. `solo` is now exempt from the clamp, so the
+  clamp only governs shared rows — its value matters less than it did. Record any verdict here.
+- **A soft-deleted image has no UI to restore it once the undo toast has gone.** The row
+  and its R2 objects survive for 30 days, so nothing is lost, but recovering one currently
+  needs a SQL command. A "recently deleted" view is the obvious fix if it ever comes up.
 - **Drag-to-reorder is unbuilt.** Arrows (icons and keys) work. The hard part is that a
   justified grid re-solves under the dragged item, so the drop indicator must be computed
   against the **pre-drag** layout.

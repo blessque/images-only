@@ -159,11 +159,11 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
    * `publish` walks `staged` in array order and `sort_order` is assigned on insert, so the
    * tray's order IS the gallery's order — arranging here saves shuffling afterwards.
    */
-  const moveStaged = useCallback((jobId: string, direction: -1 | 1) => {
+  const reorderStaged = useCallback((from: number, to: number) => {
     setStaged((files) => {
-      const from = files.findIndex((file) => file.jobId === jobId);
-      const to = from + direction;
-      if (from < 0 || to < 0 || to >= files.length) return files;
+      if (from < 0 || to < 0 || from >= files.length || to >= files.length || from === to) {
+        return files;
+      }
       const next = [...files];
       const [moved] = next.splice(from, 1);
       if (!moved) return files;
@@ -171,6 +171,14 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
       return next;
     });
   }, []);
+
+  const moveStaged = useCallback(
+    (jobId: string, direction: -1 | 1) => {
+      const from = stagedRef.current.findIndex((file) => file.jobId === jobId);
+      if (from >= 0) reorderStaged(from, from + direction);
+    },
+    [reorderStaged],
+  );
 
   const discard = useCallback(() => {
     setStaged((files) => {
@@ -418,6 +426,7 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           onChange={patchStaged}
           onHighFidelity={setHighFidelity}
           onMove={moveStaged}
+          onReorder={reorderStaged}
           onRemove={(jobId) => {
             setStaged((files) => files.filter((file) => file.jobId !== jobId));
           }}

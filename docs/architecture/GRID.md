@@ -40,22 +40,41 @@ ratios. A "Big" 3:2 photo and a "Small" 3:2 photo sitting in the same row will r
 
 This is not a defect in the algorithm; it is what "never crop" costs.
 
-So the size class means one thing only: **how many images share the row.** Hierarchy is
-produced by density, not by scaling. A Big image is big because it is *alone* in its row.
+So a *shared* class can only mean "how many images share the row". Hierarchy has to come
+from being **alone**, and that is what `solo` is for.
 
-The breakpoint table is built around that:
+### The classes
 
-| Breakpoint | Big | Medium | Small |
+| Class | Behaviour |
+|---|---|
+| **solo** | A whole row to itself, at any aspect ratio. **Exempt from the height clamp.** |
+| **wide** | Shares a row; asks for about half of one. |
+| **medium** | Shares a row; asks for about a third, tightening to a quarter on wide screens. |
+
+| Breakpoint | solo | wide | medium |
 |---|---|---|---|
 | ≤ 640 (mobile) | 1/1 | 1/1 | 1/1 |
-| 641 – 1024 | 1/1 | 1/2 | 1/2 |
-| 1025 – 1800 | **1/1** | 1/2 | 1/3 |
-| ≥ 1801 (wide) | **1/2** | 1/3 | 1/4 |
+| 641 – 1024 | 1/1 | 1/1 | 1/2 |
+| 1025 – 1800 | 1/1 | 1/2 | 1/3 |
+| ≥ 1801 (wide) | 1/1 | 1/2 | 1/4 |
 
-Big is `1/1` on normal desktop — it takes a whole row, which is the only way it reads as
-genuinely big. On wide screens it drops to `1/2` so two large images share a row, which is
-exactly the user's own instinct for 2560px displays: past a certain width a single image
-becomes a billboard, not a portfolio plate.
+**`solo` being exempt from the height clamp is the whole point of it.** This replaced
+`big`/`medium`/`small`, which promised a size the grid could not deliver: a `big` image
+taller than the clamp had a neighbour recruited to bring the row down, and then equal
+heights locked widths to aspect ratios — so the "prominent" portrait rendered *narrower*
+than the `small` landscape beside it. Observed in real use, on real photographs.
+
+Two consequences the solver enforces directly, not via fractions:
+- A solo image **never joins a row in progress** — it starts the next one.
+- A solo image is **never conscripted** to fix another row's height.
+
+The second means a shared row can exceed the ceiling when the only image next in line is
+solo. That is a goal-not-guarantee, exactly like the `minRowHeight` floor, and the tests
+assert the weaker true property rather than the convenient false one.
+
+Being tall is *explicitly requested* here, so unlike the last-row case it is honoured
+literally and the admin UI does **not** warn about it. A solo 9:16 portrait at 1440px wide
+is 2560px tall; that is what solo means.
 
 Mobile is **not a separate code path** — every class collapses to `1/1` in the table, which
 produces the one-image-per-row Instagram feel the user asked for. If mobile ever needs

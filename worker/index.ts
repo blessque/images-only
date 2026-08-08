@@ -21,7 +21,7 @@ export interface Env {
 }
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
-const VALID_CLASSES = new Set<string>(['big', 'medium', 'small']);
+const VALID_CLASSES = new Set<string>(['solo', 'wide', 'medium']);
 const VALID_RUNGS = new Set<number>(VARIANT_WIDTHS);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 

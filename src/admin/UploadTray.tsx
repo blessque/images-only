@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { SIZE_CLASSES, type SizeClass } from '@/lib/types';
 import { formatBytes, type StagedFile } from './staging';
 
@@ -9,6 +10,7 @@ interface UploadTrayProps {
   onHighFidelity: (jobId: string, value: boolean) => void;
   /** The tray's order becomes the gallery's order, so arranging here saves shuffling later. */
   onMove: (jobId: string, direction: -1 | 1) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
   onRemove: (jobId: string) => void;
   onPublish: () => void;
   onCancel: () => void;
@@ -25,12 +27,21 @@ export function UploadTray({
   onChange,
   onHighFidelity,
   onMove,
+  onReorder,
   onRemove,
   onPublish,
   onCancel,
 }: UploadTrayProps) {
   const ready = staged.filter((file) => file.status === 'ready').length;
   const failed = staged.filter((file) => file.status === 'error').length;
+
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+
+  function endDrag() {
+    setDragFrom(null);
+    setDragOver(null);
+  }
 
   return (
     <section className="tray" aria-label="Upload">
@@ -54,8 +65,47 @@ export function UploadTray({
 
       <ul className="tray-list">
         {staged.map((file, index) => (
-          <li key={file.jobId} className={`tray-item is-${file.status}`}>
-            <div className="tray-order">
+          <li
+            key={file.jobId}
+            className={
+              'tray-item is-' +
+              file.status +
+              (dragOver === index && dragFrom !== null && dragFrom !== index
+                ? dragFrom < index
+                  ? ' is-drop-after'
+                  : ' is-drop-before'
+                : '')
+            }
+            onDragOver={(event) => {
+              if (dragFrom === null) return;
+              event.preventDefault();
+              setDragOver(index);
+            }}
+            onDrop={(event) => {
+              if (dragFrom === null) return;
+              event.preventDefault();
+              onReorder(dragFrom, index);
+              endDrag();
+            }}
+          >
+            {/*
+              Only the HANDLE is draggable, not the whole row. Making the <li> draggable
+              breaks text selection in the alt-text input inside it — you end up dragging
+              the row when you meant to select a word.
+            */}
+            <div
+              className="tray-order"
+              draggable={!publishing}
+              onDragStart={(event) => {
+                setDragFrom(index);
+                event.dataTransfer.effectAllowed = 'move';
+                // Drag the whole row as the ghost, not the little handle.
+                const row = event.currentTarget.closest('li');
+                if (row) event.dataTransfer.setDragImage(row, 24, 24);
+              }}
+              onDragEnd={endDrag}
+              title="Drag to reorder"
+            >
               <button
                 type="button"
                 onClick={() => onMove(file.jobId, -1)}
