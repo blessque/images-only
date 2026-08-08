@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+*.tsbuildinfo
+
+# Local Claude working framework — guide, memory and settings, not part of the repo
+CLAUDE.md
+memory/
+.claude/
+
+# Cloudflare
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# Secrets
+.env
+.env.*
+
+# Local test photos for grid work — never served, never built
+/fixtures/
+
+# Playwright / perf harness output
+/test-results/
+/playwright-report/
+*.lighthouse.json
