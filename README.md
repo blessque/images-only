@@ -17,14 +17,41 @@ and the API. Images in R2, manifest in D1.
 
 ## Development
 
+**No Cloudflare account is needed to run the whole thing.** `wrangler dev` emulates D1 and
+R2 on your machine, so uploads, the database and the admin flow all work locally.
+
 ```bash
 npm install
-npm run dev        # Vite dev server
-npm run worker     # Worker + R2/D1 locally via wrangler
-npm test           # unit tests (grid solver)
-npm run build      # production build
+npm run local      # build + apply the local schema + serve on http://localhost:8787
 ```
+
+That is the real site: drop photographs onto it, press `Option+\`, publish, reorder. Local
+data lives in `.wrangler/` and never leaves the machine.
+
+Other tasks:
+
+```bash
+npm run dev          # grid only, against generated fixtures — no backend at all
+npm run fixtures     # regenerate the 42 test photographs (needs ffmpeg)
+npm test             # 27 unit tests: grid solver invariants + auth
+npm run verify:all   # browser suites: grid, Worker, admin end-to-end
+npm run perf         # seed 200 images and measure bytes, LCP and CLS
+npm run local:reset  # wipe local images and login attempts
+```
+
+The local admin password comes from `.dev.vars` (gitignored). Generate a real one with
+`npm run hash-password`.
 
 ## Deployment
 
-Pushes to `main` deploy via GitHub Actions. See `docs/architecture/OVERVIEW.md`.
+Needs a free Cloudflare account, then once:
+
+```bash
+npx wrangler d1 create justimages     # paste database_id into wrangler.jsonc
+npx wrangler r2 bucket create justimages
+npm run db:remote                     # apply the schema to production
+npm run hash-password                 # then `wrangler secret put` both values
+```
+
+After that, pushes to `main` deploy via GitHub Actions. See `docs/architecture/OVERVIEW.md`
+and `.claude/commands/deploy.md`.

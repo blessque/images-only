@@ -19,7 +19,10 @@
     "db:local": "wrangler d1 execute justimages --local --file=worker/schema.sql",
     "db:remote": "wrangler d1 execute justimages --remote --file=worker/schema.sql",
     "verify:admin": "node scripts/verify-admin.mjs",
-    "verify:all": "npm run verify && npm run verify:worker && npm run verify:admin"
+    "verify:all": "npm run verify && npm run verify:worker && npm run verify:admin",
+    "local": "npm run build && npm run db:local && wrangler dev",
+    "local:reset": "wrangler d1 execute justimages --local --command \"DELETE FROM images; DELETE FROM login_attempts;\"",
+    "perf": "node scripts/perf.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",
