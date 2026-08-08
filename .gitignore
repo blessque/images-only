@@ -25,3 +25,6 @@ memory/
 /test-results/
 /playwright-report/
 *.lighthouse.json
+
+# Browser verification screenshots
+/.screens/

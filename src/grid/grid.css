@@ -1,0 +1,102 @@
+/*
+ * Geometry solved by solve.ts arrives as INLINE styles (widths, heights). Everything in
+ * this file is a constant. Do not mix the two — see docs/conventions/CODE_STYLE.md.
+ */
+
+.grid {
+  display: block;
+  width: 100%;
+}
+
+.grid-row {
+  display: flex;
+  /* No gap, no margin, no padding — anywhere, ever. This is a hard requirement. */
+  gap: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tile {
+  position: relative;
+  flex: 0 0 auto;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.tile-img {
+  width: 100%;
+  height: 100%;
+  /*
+   * `cover` absorbs the sub-pixel rounding from integer widths — at most 1px, which is
+   * the only deviation from a true aspect ratio anywhere in the system. It is NOT a
+   * licence to crop: the solver guarantees the box is already within a pixel of correct.
+   */
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.tile-img.is-loaded {
+  opacity: 1;
+}
+
+/* Loading: a white rect breathing between 10% and 40%. Not a travelling gradient —
+   that reads as product-UI skeleton and fights the register. */
+.tile-pulse {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  pointer-events: none;
+  animation: tile-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tile-pulse {
+  0%,
+  100% {
+    opacity: var(--pulse-min);
+  }
+  50% {
+    opacity: var(--pulse-max);
+  }
+}
+
+.tile-broken {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.tile-broken-mark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: var(--grey-line);
+  stroke-width: 1;
+}
+
+.tile-broken-alt {
+  position: relative;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+  color: var(--grey-text);
+  text-align: center;
+  max-width: 80%;
+  background: var(--bg);
+  padding: 4px 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-pulse {
+    animation: none;
+    opacity: 0.2;
+  }
+  .tile-img {
+    transition: none;
+  }
+}

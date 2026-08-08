@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    "strict": true,
+    // The solver indexes arrays constantly; this is what stops an off-by-one
+    // becoming `undefined.width` at runtime rather than a type error.
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+
+    // TypeScript 7 removed `baseUrl`; `paths` entries must be relative to this file.
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["src", "worker", "scripts", "vite.config.ts"]
+}

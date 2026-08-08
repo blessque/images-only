@@ -128,6 +128,61 @@ discoverable one, not the fast one. One-line change if the user disagrees after 
 
 ---
 
+## Decisions made — 2026-08-09 (Phase 2, grid built and measured)
+
+### `MAX_ROW_HEIGHT_VH` is 1.4, NOT 1.0 — found by writing the maths down
+At 1.0 the clamp pulls a second image into every `big` row, which destroys the only
+mechanism this grid has for hierarchy. A full-width 3:2 photo at 1440px is 960px tall —
+more than a laptop viewport and perfectly fine to scroll. The clamp exists to stop rows
+that are *absurd* (a full-width portrait solves to 2160px), not to fit every row on one
+screen. 1.4 admits a lone landscape while still catching squares and portraits.
+
+### Row height stays FRACTIONAL; only widths are integers
+Rounding the height to an integer first was implemented, tested and **reverted**. It shifts
+`Σ(H·aᵢ)` off the container by up to `0.5·Σa` — nearly 5px for a row of panoramas — and
+redistributing that much forces some widths to move 2px, breaking the one-pixel budget the
+"never crops" guarantee rests on. Keeping H exact makes `Σ(exact) == W` identically, so the
+remainder is bounded by the image count and **each width moves at most one pixel**.
+Fractional row heights are safe: rows stack in normal flow, so adjacent rows abut exactly
+and no seam is possible. Only horizontal neighbours inside a row needed integer widths.
+
+### The `minRowHeight` floor is a goal, not a guarantee — the test was wrong, not the code
+A lone panorama in a 320px container genuinely *is* 107px tall. The floor is only reachable
+by REMOVING images and you cannot remove the last one. The honest invariant, now asserted:
+the solver breaches the floor only when it provably cannot do better — a single-image row,
+or one where giving an image back would breach the ceiling instead.
+
+### CLS was 0.049 and the first hypothesis was WRONG — measure, do not reason
+Browser verification showed CLS 0.03–0.08 despite "CLS is 0 by construction". First guess
+was the dev-only async fixture fetch; simulating the production inlined manifest changed
+almost nothing. Instrumenting individual `layout-shift` entries found **one** shift at
+184ms attributed to `footer`.
+
+Cause: `Grid` seeded `containerWidth` at 0 and waited for `ResizeObserver`, which fires
+after mount — so the first paint had no rows, the footer painted near the top, and 42 rows
+then shoved it down. A `requestAnimationFrame` in the observer made it worse.
+
+Fix: seed `containerWidth` synchronously from `document.documentElement.clientWidth`
+(**not** `innerWidth` — `clientWidth` excludes the scrollbar, which is exactly what a
+full-width block gets). The observer now handles only *changes*, which is what it is for.
+Result: **CLS 0.00000 at all four breakpoints.**
+
+Lesson worth keeping: the manifest supplies every aspect ratio, but the solver also needs
+the container width, and an asynchronously-discovered width reintroduces exactly the shift
+the inlined manifest was bought to prevent.
+
+### `srcset` `w` descriptors are the file's real width, not the rung number
+Rungs are LONG-EDGE sizes, so a 9:16 image at rung 1600 is 900×1600 and its descriptor
+must be `900w`. Getting this wrong makes variant selection wrong for every portrait in the
+gallery — silently, and in the expensive direction. `variantPixelWidth()` in `imageUrl.ts`.
+
+### Fixtures carry a border and a centred label, deliberately
+If the grid ever crops, the border is clipped on one side and the label goes off-centre —
+the failure becomes VISIBLE rather than merely measurable. The unit tests prove never-crops
+numerically; the fixtures prove it to the eye.
+
+---
+
 ## Open issues
 
 - `MAX_ROW_HEIGHT` and the wide-screen Big fraction (`1/2` vs `1/3`) are **taste dials, not

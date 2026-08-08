@@ -1,0 +1,61 @@
+/*
+ * are.na register: black, two or three greys, one typeface, no effects.
+ * If a change makes this look more like a product and less like a wall of images,
+ * it is wrong. See docs/decisions/TUNING_LOG.md.
+ */
+
+:root {
+  --bg: #000000;
+  --surface: #0a0a0a; /* the box an image has not arrived into yet */
+  --grey-line: #333333; /* broken-image rule, footer hairline */
+  --grey-text: #6e6e6e; /* footer copy, alt text on a broken tile */
+  --grey-text-hover: #a8a8a8;
+
+  --pulse-min: 0.1;
+  --pulse-max: 0.4;
+
+  --footer-height: 44px;
+
+  font-family:
+    'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--grey-text);
+}
+
+body {
+  /* The grid is edge to edge. Nothing here may introduce a margin or a gutter. */
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+.app-message {
+  padding: 24vh 24px;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--grey-text);
+}

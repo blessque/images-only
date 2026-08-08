@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>justimages</title>
+    <meta name="description" content="Photography portfolio." />
+
+    <!--
+      The Worker replaces this element's contents with the real manifest at request
+      time. Inlining it collapses the load-JS → fetch-manifest → layout waterfall, so
+      the grid geometry is solvable from the first response. See docs/architecture/OVERVIEW.md.
+      Empty here means "development": the client falls back to fixtures.
+    -->
+    <script type="application/json" id="manifest"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
