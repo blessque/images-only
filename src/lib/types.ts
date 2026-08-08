@@ -16,6 +16,11 @@ export interface ImageItem {
   aspect: number;
   sizeClass: SizeClass;
   alt: string;
+  /**
+   * Largest rung present in R2. The encoder never upscales, so a small source stops part
+   * way up the ladder; advertising a rung that does not exist 404s the tile.
+   */
+  maxRung: number;
 }
 
 export interface Settings {

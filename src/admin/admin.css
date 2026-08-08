@@ -378,3 +378,36 @@
     min-width: 0;
   }
 }
+
+/* Tray reordering. The tray's order IS the gallery's order — publish walks the array and
+   sort_order is assigned on insert — so arranging here saves shuffling afterwards. */
+.tray-order {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.tray-order button {
+  width: 20px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--admin-text);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tray-order button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.tray-position {
+  color: #555;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}

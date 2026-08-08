@@ -146,21 +146,21 @@ async function main() {
     const created = await fetch(`${BASE}/api/images`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'medium', alt: xssAlt }),
+      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'medium', alt: xssAlt, maxRung: 400 }),
     });
     check(created.status === 201, `creating the metadata row succeeds (${created.status})`);
 
     const duplicate = await fetch(`${BASE}/api/images`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'medium', alt: '' }),
+      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'medium', alt: '', maxRung: 400 }),
     });
     check(duplicate.status === 409, `a colliding id returns 409, not a 500 (${duplicate.status})`);
 
     const invalid = await fetch(`${BASE}/api/images`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ id: 'nope', aspect: -1, sizeClass: 'huge' }),
+      body: JSON.stringify({ id: 'nope', aspect: -1, sizeClass: 'huge', maxRung: 9999 }),
     });
     check(invalid.status === 400, `invalid image metadata is rejected (${invalid.status})`);
 

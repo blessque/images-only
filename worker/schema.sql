@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS images (
   aspect       REAL    NOT NULL,
   size_class   TEXT    NOT NULL CHECK (size_class IN ('big', 'medium', 'small')),
   alt          TEXT    NOT NULL DEFAULT '',
+  -- The largest variant that actually EXISTS in R2. The encoder never upscales, so a
+  -- 1024px source has no 1600 or 2400 rung — and srcset must not advertise one, or the
+  -- browser picks it, 404s, and the tile falls through to the broken-image mark.
+  -- Emitted rungs are always a prefix of the ladder, so one number describes the set.
+  max_rung     INTEGER NOT NULL DEFAULT 2400,
   sort_order   INTEGER NOT NULL,
   created_at   INTEGER NOT NULL,
   -- Soft delete: a non-technical user must not lose work to a misclick. Purged after 30

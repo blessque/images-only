@@ -18,7 +18,8 @@ const A = {
 let seq = 0;
 function img(aspect: number, sizeClass: SizeClass = 'medium'): ImageItem {
   seq += 1;
-  return { id: `i${seq}`, aspect, sizeClass, alt: '' };
+  // maxRung is irrelevant to layout — the solver only ever reads aspect and sizeClass.
+  return { id: `i${seq}`, aspect, sizeClass, alt: '', maxRung: 2400 };
 }
 
 function params(over: Partial<SolveParams> = {}): SolveParams {

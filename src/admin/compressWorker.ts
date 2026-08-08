@@ -12,7 +12,10 @@ import { VARIANT_WIDTHS } from '@/lib/types';
 export interface CompressRequest {
   jobId: string;
   file: File;
-  /** Raises this one image's budget — the escape hatch for fine grain or subtle gradients. */
+  /**
+   * Raises this image's starting QUALITY and its byte budget — the escape hatch for fine
+   * grain or subtle gradients. Per image, reversible, never a global switch.
+   */
   highFidelity: boolean;
 }
 
@@ -45,9 +48,17 @@ function budgetFor(rung: number, highFidelity: boolean): number {
  * Rung 3 is encoded HIGHER than the rest, deliberately: originals are not stored, so it is
  * the master any future re-encode would have to start from. Bought insurance — do not
  * normalise it. See IMAGE_PIPELINE.md.
+ *
+ * High fidelity raises the STARTING quality, not only the budget. Raising the budget alone
+ * was tried and is a no-op for most photographs: the search only steps quality DOWN when a
+ * file is over budget, so an image that already fit came out byte-identical and the
+ * checkbox visibly did nothing. The point of the escape hatch is "this one suffered, give
+ * it more" — that has to mean more quality.
  */
-function startingQuality(rung: number): number {
-  return rung === VARIANT_WIDTHS[VARIANT_WIDTHS.length - 1] ? 0.92 : 0.86;
+function startingQuality(rung: number, highFidelity: boolean): number {
+  const isTopRung = rung === VARIANT_WIDTHS[VARIANT_WIDTHS.length - 1];
+  if (highFidelity) return isTopRung ? 0.97 : 0.95;
+  return isTopRung ? 0.92 : 0.86;
 }
 
 function fit(width: number, height: number, longEdge: number) {
@@ -112,7 +123,7 @@ async function encodeWithinBudget(
   highFidelity: boolean,
 ): Promise<Blob> {
   const budget = budgetFor(rung, highFidelity);
-  let quality = startingQuality(rung);
+  let quality = startingQuality(rung, highFidelity);
   let blob = await canvas.convertToBlob({ type: 'image/webp', quality });
 
   // Floor at 0.62: below that WebP starts producing visible blocking, and shipping a

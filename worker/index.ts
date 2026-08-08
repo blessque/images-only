@@ -160,7 +160,13 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
 async function handleCreate(request: Request, env: Env): Promise<Response> {
   if (!(await requireAuth(request, env))) return json({ error: 'Unauthorized' }, 401);
 
-  let body: { id?: unknown; aspect?: unknown; sizeClass?: unknown; alt?: unknown };
+  let body: {
+    id?: unknown;
+    aspect?: unknown;
+    sizeClass?: unknown;
+    alt?: unknown;
+    maxRung?: unknown;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -173,13 +179,18 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     typeof body.sizeClass === 'string' && VALID_CLASSES.has(body.sizeClass)
       ? (body.sizeClass as SizeClass)
       : null;
-  if (!id || !aspect || !sizeClass) return json({ error: 'Invalid image' }, 400);
+  // Must be a rung we actually serve — an arbitrary number here would make srcset
+  // advertise a key that was never written.
+  const maxRung =
+    typeof body.maxRung === 'number' && VALID_RUNGS.has(body.maxRung) ? body.maxRung : null;
+  if (!id || !aspect || !sizeClass || !maxRung) return json({ error: 'Invalid image' }, 400);
 
   const item: ImageItem = {
     id,
     aspect,
     sizeClass,
     alt: typeof body.alt === 'string' ? body.alt.slice(0, 500) : '',
+    maxRung,
   };
 
   // Metadata is written LAST, after every rung has landed in R2 — so an abandoned upload

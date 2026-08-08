@@ -21,13 +21,28 @@ export function variantPixelWidth(rung: number, aspect: number): number {
   return aspect >= 1 ? rung : Math.max(1, Math.round(rung * aspect));
 }
 
-export function srcSetFor(base: string, item: ImageItem): string {
-  return VARIANT_WIDTHS.map(
-    (rung) => `${variantUrl(base, item.id, rung)} ${variantPixelWidth(rung, item.aspect)}w`,
-  ).join(', ');
+/**
+ * Rungs that actually exist for this image.
+ *
+ * The encoder never upscales, so a 1024px source stops at the 800 rung. Advertising 1600
+ * or 2400 anyway makes the browser fetch a key that was never written — a 404, and the
+ * tile falls through to the broken-image mark. Emitted rungs are a prefix of the ladder,
+ * so `maxRung` describes the whole set.
+ */
+export function availableRungs(item: ImageItem): number[] {
+  const rungs = VARIANT_WIDTHS.filter((rung) => rung <= item.maxRung);
+  // Rung 0 is always emitted, even for a source smaller than it — never return nothing.
+  return rungs.length > 0 ? rungs : [VARIANT_WIDTHS[0] ?? 400];
 }
 
-/** Fallback for browsers ignoring srcset — the middle rung, never the largest. */
+export function srcSetFor(base: string, item: ImageItem): string {
+  return availableRungs(item)
+    .map((rung) => `${variantUrl(base, item.id, rung)} ${variantPixelWidth(rung, item.aspect)}w`)
+    .join(', ');
+}
+
+/** Fallback for browsers ignoring srcset — the middle rung, clamped to what exists. */
 export function fallbackSrc(base: string, item: ImageItem): string {
-  return variantUrl(base, item.id, VARIANT_WIDTHS[1] ?? 800);
+  const rungs = availableRungs(item);
+  return variantUrl(base, item.id, rungs[1] ?? rungs[0] ?? 400);
 }

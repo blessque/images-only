@@ -304,6 +304,47 @@ their CDN and never appear in the ZIP. So the conversion is ours to do.
 
 ---
 
+## Decisions made — 2026-08-09 (iteration 7, found by the user testing locally)
+
+### `srcset` must never advertise a rung the encoder did not write — SHIPPED BROKEN
+The encoder correctly refuses to upscale, so a 1024px source stops at the 800 rung. But
+`srcSetFor` listed all four rungs unconditionally, so the browser was told a 2400 variant
+existed, picked it at DPR 2, got a **404**, and the tile fell through to the broken-image
+mark. 18 × 404 on `2400.webp`, 8 × on `1600.webp` in one session.
+
+**Why nothing caught it:** every source in the whole test suite was ≥2400px (ffmpeg
+`testsrc2` at 4000×2667 and 2000×3000), so all four rungs always existed. The bug requires
+a source SMALLER than a rung, and that case was never exercised. AI-generated images —
+1024×1024, 1536×1024 — hit it immediately.
+
+Fix: D1 records `max_rung`, the largest rung actually written. Emitted rungs are always a
+prefix of the ladder, so one number describes the set. Now covered three ways: a unit test
+on `availableRungs`, a 1024px source in the e2e fixtures, and a **blanket assertion that no
+`/img/` request 404s during the entire admin run**.
+
+Lesson worth keeping: a fixture set that is uniform in the dimension a bug lives in cannot
+find that bug, however many assertions it carries.
+
+### High fidelity must raise QUALITY, not only the budget
+First implementation doubled the byte budget. That is a no-op for most photographs: the
+quality search only steps DOWN when a file is over budget, so an image that already fit came
+back byte-identical and the checkbox visibly did nothing (193 KB → 193 KB, measured). It now
+raises the starting quality too (0.86 → 0.95, top rung 0.92 → 0.97), which is what "this one
+suffered, give it more" has to mean. Measured after: 193 KB → 274 KB.
+
+### The tray reorders BEFORE publishing
+`publish` walks `staged` in array order and `sort_order` is assigned on insert, so the
+tray's order *is* the gallery's order. Arranging twenty photographs there is far less work
+than shuffling them afterwards one arrow-click at a time.
+
+### A positional assertion in a test is a latent bug
+The colour check sampled `images[length - 1]` as the swatch. Adding a fourth fixture and a
+reorder step moved it, and the test reported a 187-channel "colour drift" that was pure test
+error. It now finds the swatch by alt text. Same class as the two earlier cases where a red
+test meant the test was wrong.
+
+---
+
 ## Open issues
 
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `big` fraction (1/2) are still taste dials**

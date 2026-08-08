@@ -35,6 +35,13 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const compress = useCompressor();
+
+  // Mirrors `staged` so callbacks can read the current list without taking it as a
+  // dependency — otherwise every keystroke in an alt field rebuilds them.
+  const stagedRef = useRef<StagedFile[]>([]);
+  useEffect(() => {
+    stagedRef.current = staged;
+  }, [staged]);
   const api = useMemo(() => (token ? new AdminApi(token) : null), [token]);
 
   const notify = useCallback((message: string, undo?: () => void) => {
@@ -75,6 +82,30 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
     );
   }, []);
 
+  const runCompression = useCallback(
+    async (jobId: string, file: File, highFidelity: boolean) => {
+      patchStaged(jobId, { status: 'compressing', rung: null, error: undefined });
+      try {
+        const outcome = await compress(jobId, file, highFidelity, (rung) =>
+          patchStaged(jobId, { rung }),
+        );
+        patchStaged(jobId, {
+          status: 'ready',
+          aspect: outcome.aspect,
+          variants: outcome.variants,
+          compressedBytes: totalBytes(outcome.variants),
+          rung: null,
+        });
+      } catch (cause) {
+        patchStaged(jobId, {
+          status: 'error',
+          error: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+    },
+    [compress, patchStaged],
+  );
+
   const addFiles = useCallback(
     async (incoming: File[]) => {
       const images = incoming.filter(isAcceptedImage);
@@ -99,28 +130,47 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
       // Sequential on purpose: twenty concurrent decodes of 10MB photographs is how a
       // responsive-looking tray runs the machine out of memory.
       for (const entry of entries) {
-        patchStaged(entry.jobId, { status: 'compressing' });
-        try {
-          const outcome = await compress(entry.jobId, entry.file, entry.highFidelity, (rung) =>
-            patchStaged(entry.jobId, { rung }),
-          );
-          patchStaged(entry.jobId, {
-            status: 'ready',
-            aspect: outcome.aspect,
-            variants: outcome.variants,
-            compressedBytes: totalBytes(outcome.variants),
-            rung: null,
-          });
-        } catch (cause) {
-          patchStaged(entry.jobId, {
-            status: 'error',
-            error: cause instanceof Error ? cause.message : String(cause),
-          });
-        }
+        await runCompression(entry.jobId, entry.file, entry.highFidelity);
       }
     },
-    [compress, patchStaged],
+    [runCompression],
   );
+
+  /**
+   * High fidelity RE-ENCODES that one file.
+   *
+   * The checkbox only appears after the first pass has already run, so toggling it has to
+   * redo the work — otherwise it is a control that visibly does nothing, which is worse
+   * than not offering it. Still per-image and reversible; never a global switch.
+   */
+  const setHighFidelity = useCallback(
+    (jobId: string, highFidelity: boolean) => {
+      const entry = stagedRef.current.find((file) => file.jobId === jobId);
+      if (!entry) return;
+      patchStaged(jobId, { highFidelity });
+      void runCompression(jobId, entry.file, highFidelity);
+    },
+    [patchStaged, runCompression],
+  );
+
+  /**
+   * Reorder inside the tray, before anything is published.
+   *
+   * `publish` walks `staged` in array order and `sort_order` is assigned on insert, so the
+   * tray's order IS the gallery's order — arranging here saves shuffling afterwards.
+   */
+  const moveStaged = useCallback((jobId: string, direction: -1 | 1) => {
+    setStaged((files) => {
+      const from = files.findIndex((file) => file.jobId === jobId);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= files.length) return files;
+      const next = [...files];
+      const [moved] = next.splice(from, 1);
+      if (!moved) return files;
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
 
   const discard = useCallback(() => {
     setStaged((files) => {
@@ -149,6 +199,9 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           aspect: file.aspect,
           sizeClass: file.sizeClass,
           alt: file.alt,
+          // The largest rung the encoder actually produced. A source smaller than the top
+          // of the ladder stops part way up, and srcset must not claim otherwise.
+          maxRung: Math.max(...file.variants.map((variant) => variant.rung)),
         };
         await api.createImage(item);
         patchStaged(file.jobId, { status: 'done' });
@@ -363,6 +416,8 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           staged={staged}
           publishing={publishing}
           onChange={patchStaged}
+          onHighFidelity={setHighFidelity}
+          onMove={moveStaged}
           onRemove={(jobId) => {
             setStaged((files) => files.filter((file) => file.jobId !== jobId));
           }}

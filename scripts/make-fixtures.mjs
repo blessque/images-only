@@ -129,6 +129,8 @@ async function main() {
       aspect: s.aspect,
       sizeClass: s.sizeClass,
       alt: `Fixture ${s.index}, ${s.label}`,
+      // Fixtures are rendered at every rung, so the whole ladder exists.
+      maxRung: RUNGS[RUNGS.length - 1],
     })),
     settings: { name: 'Fixture Gallery', contact: 'hello@example.com' },
   };

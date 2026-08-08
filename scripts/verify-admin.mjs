@@ -58,6 +58,15 @@ async function makeSources() {
     '-f', 'lavfi', '-i', `color=c=${hex}:s=1600x1600`,
     '-frames:v', '1', path.join(UPLOADS, 'swatch.png'),
   ]);
+  // SMALLER than the 1600 and 2400 rungs. This is the case that shipped broken: the
+  // encoder correctly refuses to upscale, so those rungs are never written — and srcset
+  // must not advertise them. Every earlier fixture was >= 2400px, which is exactly why
+  // nothing caught it.
+  await run('ffmpeg', [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'testsrc2=s=1024x1024',
+    '-frames:v', '1', path.join(UPLOADS, 'small_1024.png'),
+  ]);
 }
 
 async function waitForServer() {
@@ -90,6 +99,15 @@ async function main() {
     const requested = [];
     page.on('request', (request) => requested.push(request.url()));
 
+    // The bug that reached the browser was a 404 on a variant srcset advertised but the
+    // encoder never wrote. Watch every image response for the whole run.
+    const imageErrors = [];
+    page.on('response', (response) => {
+      if (response.url().includes('/img/') && response.status() >= 400) {
+        imageErrors.push(`${response.status()} ${response.url().split('/').slice(-2).join('/')}`);
+      }
+    });
+
     // ── A normal visitor ─────────────────────────────────────────────────────
     console.log('\nPublic visitor');
     await page.goto(BASE, { waitUntil: 'networkidle' });
@@ -121,13 +139,14 @@ async function main() {
       path.join(UPLOADS, 'Sunrise_over_the_bay.png'),
       path.join(UPLOADS, 'IMG_4821.png'),
       path.join(UPLOADS, 'swatch.png'),
+      path.join(UPLOADS, 'small_1024.png'),
     ]);
     await page.waitForFunction(
-      () => document.querySelectorAll('.tray-item.is-ready').length === 3,
+      () => document.querySelectorAll('.tray-item.is-ready').length === 4,
       undefined,
       { timeout: 120_000 },
     );
-    check(true, 'all three files compress in the Web Worker');
+    check(true, 'all four files compress in the Web Worker');
 
     const sizes = await page.evaluate(() =>
       [...document.querySelectorAll('.tray-item')].map((item) => ({
@@ -168,19 +187,55 @@ async function main() {
       `got "${sizes[1]?.alt}"`,
     );
 
+    // ── Tray controls ────────────────────────────────────────────────────────
+    console.log('\nTray');
+    const firstAltBefore = await page.inputValue('.tray-item:nth-child(1) .tray-alt');
+    await page.click('.tray-item:nth-child(1) [aria-label="Move down"]');
+    await page.waitForTimeout(200);
+    check(
+      (await page.inputValue('.tray-item:nth-child(2) .tray-alt')) === firstAltBefore,
+      'files can be reordered in the tray, BEFORE publishing',
+    );
+
+    const sizeBefore = await page.textContent('.tray-item:nth-child(1) .tray-after');
+    await page.check('.tray-item:nth-child(1) .tray-fidelity input');
+    await page.waitForFunction(
+      () => document.querySelectorAll('.tray-item.is-ready').length === 4,
+      undefined,
+      { timeout: 120_000 },
+    );
+    const sizeAfter = await page.textContent('.tray-item:nth-child(1) .tray-after');
+    check(
+      sizeBefore !== sizeAfter,
+      `high fidelity RE-ENCODES rather than doing nothing (${sizeBefore} → ${sizeAfter})`,
+    );
+
     // ── Publish ──────────────────────────────────────────────────────────────
     console.log('\nPublish');
     const before = (await (await fetch(`${BASE}/api/images`)).json()).images.length;
     await page.click('.tray-primary');
     await page.waitForFunction(
-      (n) => document.querySelectorAll('.tile').length === n + 3,
+      (n) => document.querySelectorAll('.tile').length === n + 4,
       before,
       { timeout: 120_000 },
     );
-    check(true, `three images publish and appear in the grid (${before} → ${before + 3})`);
+    check(true, `four images publish and appear in the grid (${before} → ${before + 4})`);
 
     const manifest = await (await fetch(`${BASE}/api/images`)).json();
-    check(manifest.images.length === before + 3, 'and they persist in the manifest');
+    check(manifest.images.length === before + 4, 'and they persist in the manifest');
+
+    const small = manifest.images.find((image) => image.maxRung < 2400);
+    check(
+      small !== undefined,
+      'the 1024px source records a maxRung below the top of the ladder',
+      `maxRungs: ${manifest.images.map((i) => i.maxRung).join(', ')}`,
+    );
+    await page.waitForTimeout(800);
+    check(
+      imageErrors.length === 0,
+      'NO image request 404s — srcset never advertises a variant that was not written',
+      imageErrors.slice(0, 4).join(', '),
+    );
 
     const uncropped = await page.evaluate(() =>
       [...document.querySelectorAll('.tile-img')]
@@ -194,7 +249,12 @@ async function main() {
 
     // ── Colour fidelity ──────────────────────────────────────────────────────
     console.log('\nColour');
-    const swatchId = manifest.images[manifest.images.length - 1].id;
+    // By name, not by position — the tray-reorder step above moves things around, and
+    // there are four files now. Indexing into the manifest silently sampled the wrong
+    // image and reported a 187-channel "colour drift" that was pure test error.
+    const swatch = manifest.images.find((image) => image.alt === 'Swatch');
+    check(swatch !== undefined, 'the swatch is findable by its alt text');
+    const swatchId = swatch?.id ?? manifest.images[0].id;
     const sampled = await page.evaluate(async (id) => {
       const image = new Image();
       image.crossOrigin = 'anonymous';

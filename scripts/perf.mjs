@@ -78,6 +78,7 @@ async function seed(token) {
         aspect: source.aspect,
         sizeClass: CLASSES[index % CLASSES.length],
         alt: source.alt,
+        maxRung: RUNGS[RUNGS.length - 1],
       }),
     });
     if (index % 25 === 0) process.stdout.write('.');
