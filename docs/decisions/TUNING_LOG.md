@@ -281,13 +281,23 @@ and sources above 100KB shrink by more than half.
 
 ## Open issues
 
-- `MAX_ROW_HEIGHT` and the wide-screen Big fraction (`1/2` vs `1/3`) are **taste dials, not
-  yet tuned by eye**. Both need a pass against real photos in Phase 2, and the verdict
-  recorded here.
-- Drag-to-reorder is unbuilt. The hard part is that a justified grid re-solves under the
-  dragged item, so the drop indicator must be computed against the **pre-drag** layout.
-- Orphaned R2 objects from abandoned uploads are not yet reaped. Metadata is written last on
-  purpose, so orphans are the designed failure mode — invisible and cheap, versus a manifest
-  row pointing at a missing image. A sweep is a maintenance task, not a correctness one.
-- No domain chosen. Workers gives a `*.workers.dev` subdomain; a custom domain is a later
-  5-minute change.
+- **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `big` fraction (1/2) are still taste dials**
+  tuned against synthetic fixtures, not against his photographs. First real upload session
+  should settle both; record the verdict here.
+- **Inter Tight is not yet self-hosted.** `global.css` names it first and falls back to the
+  system stack, so the site currently renders in the fallback. Add the woff2 to `public/`
+  and a `@font-face` — do NOT add a Google Fonts `<link>` (an extra DNS + TLS handshake
+  before first paint, on a site whose whole pitch is speed).
+- **Drag-to-reorder is unbuilt.** Arrows (icons and keys) work. The hard part is that a
+  justified grid re-solves under the dragged item, so the drop indicator must be computed
+  against the **pre-drag** layout.
+- **Orphaned R2 objects are not reaped.** Metadata is written last on purpose, so orphans
+  are the designed failure mode — invisible and cheap, versus a manifest row pointing at a
+  missing image. Soft-deleted rows also keep their bytes so undo works. A sweep past the
+  30-day window is a maintenance task, not a correctness one.
+- **Nothing is deployed.** Needs a Cloudflare account, `wrangler d1 create justimages`, an
+  R2 bucket, the real `database_id` in `wrangler.jsonc`, and two `wrangler secret put`
+  calls. No domain chosen; `*.workers.dev` works until one is.
+- **`.dev.vars` currently holds a throwaway local password** (`test-password-1234`) so the
+  verification scripts can run. It is gitignored and never leaves the machine, but it is
+  not a secret and must not be reused in production.

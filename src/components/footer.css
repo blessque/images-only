@@ -48,3 +48,29 @@
     display: none;
   }
 }
+
+/* Admin: the two texts become inputs in place. They are the only copy on the site —
+   a settings panel would be more UI than content. */
+.footer.is-editing {
+  gap: 8px;
+}
+
+.footer-field {
+  flex: 0 1 200px;
+  min-width: 0;
+  padding: 4px 6px;
+  background: #0d0d0d;
+  border: 1px solid var(--grey-line);
+  color: var(--grey-text-hover);
+  font: inherit;
+  font-size: 12px;
+}
+
+.footer-field-wide {
+  flex: 1 1 260px;
+}
+
+.footer-field:focus {
+  outline: 1px solid #555;
+  outline-offset: -1px;
+}

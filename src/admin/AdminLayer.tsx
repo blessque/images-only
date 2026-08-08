@@ -287,10 +287,29 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
     };
   }, [token, selectedId, move, addFiles]);
 
+  const editSettings = useCallback(
+    async (patch: Partial<Manifest['settings']>) => {
+      if (!api) return;
+      const before = manifest.settings;
+      if (Object.entries(patch).every(([key, value]) => before[key as 'name'] === value)) return;
+
+      onManifest({ ...manifest, settings: { ...before, ...patch } });
+      try {
+        await api.patchSettings(patch);
+      } catch (cause) {
+        onManifest({ ...manifest, settings: before });
+        handleFailure(cause);
+      }
+    },
+    [api, manifest, onManifest, handleFailure],
+  );
+
   const hooks = useMemo<AdminHooks>(
     () =>
       token
         ? {
+            adminActive: true,
+            editSettings: (patch) => void editSettings(patch),
             renderTileOverlay: (item, index) => (
               <div
                 className={selectedId === item.id ? 'tc-wrap is-selected' : 'tc-wrap'}
@@ -309,7 +328,7 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
             ),
           }
         : {},
-    [token, selectedId, manifest.images.length, move, patchImage, remove],
+    [token, selectedId, manifest.images.length, move, patchImage, remove, editSettings],
   );
 
   if (!token) {

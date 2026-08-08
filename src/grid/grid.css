@@ -100,3 +100,15 @@
     transition: none;
   }
 }
+
+/* Admin-only advice. Never shown to a visitor, and it never changes the layout — the
+   final row still fills the width, because a gap and a crop are both hard-rule
+   violations. See docs/architecture/GRID.md. */
+.grid-warning {
+  margin: 0;
+  padding: 10px 12px;
+  background: #17130a;
+  border-top: 1px solid #3a2f16;
+  color: #b99a52;
+  font-size: 12px;
+}

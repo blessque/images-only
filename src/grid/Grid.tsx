@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ImageItem } from '@/lib/types';
 import { solve } from './solve';
-import { MIN_ROW_HEIGHT_PX, fractionsFor, maxRowHeightFor } from './gridParams';
+import {
+  LAST_ROW_WARN_FACTOR,
+  MIN_ROW_HEIGHT_PX,
+  fractionsFor,
+  maxRowHeightFor,
+} from './gridParams';
 import { Tile } from './Tile';
+import { useAdminHooks } from '@/lib/adminContext';
 
 interface GridProps {
   items: readonly ImageItem[];
@@ -14,6 +20,7 @@ const EAGER_VIEWPORT_FACTOR = 1.2;
 
 export function Grid({ items, base }: GridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { adminActive } = useAdminHooks();
 
   // Seeded SYNCHRONOUSLY so the very first render already produces the full grid.
   //
@@ -78,6 +85,15 @@ export function Grid({ items, base }: GridProps) {
   let cumulativeHeight = 0;
   let flatIndex = -1;
 
+  // An incomplete final row has three possible responses: leave a gap, crop, or be tall.
+  // The first two break hard rules, so it is tall — and the honest fix is to tell him
+  // where he can act on it, rather than silently degrade the one promise the site makes.
+  const lastRow = rows[rows.length - 1];
+  const tooTall =
+    adminActive === true &&
+    lastRow !== undefined &&
+    lastRow.height > maxRowHeightFor(viewportHeight) * LAST_ROW_WARN_FACTOR;
+
   return (
     <div className="grid" ref={containerRef}>
       {rows.map((row, rowIndex) => {
@@ -104,6 +120,13 @@ export function Grid({ items, base }: GridProps) {
           </div>
         );
       })}
+
+      {tooTall ? (
+        <p className="grid-warning">
+          The last row is {Math.round(lastRow.height)}px tall — it has too few images to fill
+          the width at a normal height. Add one more, or move a wider photograph to the end.
+        </p>
+      ) : null}
     </div>
   );
 }
