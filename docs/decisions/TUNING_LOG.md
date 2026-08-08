@@ -183,6 +183,50 @@ numerically; the fixtures prove it to the eye.
 
 ---
 
+## Decisions made — 2026-08-09 (Phase 3, Worker built and integration-tested)
+
+### The router must key on CONTENT TYPE, not on 404 — the inlining bug
+The first router did `env.ASSETS.fetch(request)` and returned the result unless it 404'd.
+For `/` the asset server answers **200** with the un-inlined `index.html`, so `serveShell`
+never ran and the manifest injection — the entire architectural point of putting one Worker
+in front of both — silently did nothing. `run_worker_first: true` got the request to the
+Worker; the Worker's own code then handed it straight back.
+
+Fix: **any** response the asset server would return with `text/html` is replaced by the
+inlined shell. Keying on content type rather than on the path also covers future routes
+that resolve to a document. Caught only by integration-testing the real Worker; no unit
+test of `serveShell` would have found it, because `serveShell` was correct.
+
+### Presigned R2 URLs — rejected
+They need R2's S3-compatible credentials as a third secret, and they exist to keep large
+uploads off the origin. Every rung here is under a megabyte and the Worker is already the
+auth boundary, so uploading through it means authorisation is checked by the same code as
+every other write with nothing extra to configure or leak.
+
+### Image ids are minted CLIENT-side, and a collision is a 409
+The R2 keys must exist before the variants are written, and the variants are written before
+the metadata row (so an abandoned upload orphans bytes rather than pointing a manifest row
+at nothing). So the client mints the id. A primary-key collision is therefore representable
+— astronomically unlikely at 64 bits, but an uncaught constraint error surfaces as a 500,
+and a 500 mid-upload is the one failure a non-technical user cannot act on.
+
+### The rate limiter counts BEFORE the password check, deliberately
+A flood of wrong guesses cannot outrun the counter, and — verified in the integration test —
+**even the correct password is refused while limited.** Refusing only wrong passwords would
+turn the limiter into a password oracle.
+
+### Not a JWT
+One issuer, one audience, one algorithm. A header announcing which algorithm to trust would
+be pure attack surface (`alg: none`). The token is `base64url(payload).base64url(HMAC)`.
+
+### Alt text is the injection vector, and it is escaped at the inlining site
+User-controlled alt text lands inside `<script type="application/json">`. A caption
+containing `</script>` would close the tag. `<` is escaped to `\u003c` — JSON treats them
+as identical, so nothing downstream needs to know. Asserted in the integration test with a
+real payload.
+
+---
+
 ## Open issues
 
 - `MAX_ROW_HEIGHT` and the wide-screen Big fraction (`1/2` vs `1/3`) are **taste dials, not

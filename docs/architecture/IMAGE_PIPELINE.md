@@ -136,10 +136,22 @@ R2 object.
 
 ## Upload sequence
 
-1. Worker decodes + encodes the ladder, reporting progress per file
-2. Client requests short-lived presigned PUTs (auth checked server-side)
-3. Rungs upload in parallel
-4. Only once every rung lands: `POST /api/images` writes the D1 row
+1. The browser's Web Worker encodes the ladder, reporting progress per file
+2. Each rung is `PUT /api/upload/{id}/{rung}.webp` — straight through the Cloudflare Worker
+   into R2, in parallel
+3. Only once every rung lands: `POST /api/images` writes the D1 row
+
+**Presigned URLs were considered and dropped.** They need R2's S3-compatible credentials as
+a third secret, and they exist to keep large uploads off the origin — but every rung here is
+under a megabyte and the Worker is already the auth boundary. Uploading through it means
+authorisation is checked by the same code as every other write, with nothing extra to
+configure or leak. `MAX_UPLOAD_BYTES` caps a rung at 8MB.
+
+The **id is minted client-side** (`src/lib/ids.ts`), because the R2 keys must exist before
+the variants can be written and the variants are written before the metadata row. The
+Worker validates the shape and returns **409** on a collision — an uncaught primary-key
+error would surface as a 500, and a 500 mid-upload is the one failure a non-technical user
+has no idea what to do about.
 
 Metadata is written **last**, so a failed or abandoned upload leaves orphaned R2 objects
 rather than a manifest row pointing at a missing image. Orphans are invisible and cheap;

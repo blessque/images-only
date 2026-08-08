@@ -1,0 +1,55 @@
+name: Deploy
+
+# Builds and ships the Worker (static assets + API) to Cloudflare.
+#
+# Requires two repo secrets, once:
+#   CLOUDFLARE_API_TOKEN    — scoped to Workers Scripts:Edit, D1:Edit, R2:Edit
+#   CLOUDFLARE_ACCOUNT_ID
+#
+# It does NOT set ADMIN_PASSWORD_HASH or TOKEN_SECRET — those are Worker secrets, set once
+# by hand with `wrangler secret put` and deliberately never present in CI. A deploy must
+# not be able to change the password.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # lets you ship a branch deliberately from the Actions tab
+
+permissions:
+  contents: read
+
+# The newest commit is always the one that should be live, so a newer run supersedes an
+# older one rather than queueing behind it. A stranded queued run silently stops the site
+# from updating, which is a worse failure than a superseded publish.
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci`, not `install` — installs exactly what package-lock.json pins, so CI
+      # cannot silently drift to a version you never tested against.
+      - run: npm ci
+
+      # The grid's invariants ("never crops", "fills exactly") and the whole auth surface
+      # are covered here. A red test must stop the deploy, not annotate it.
+      - run: npm test
+
+      # `npm run build` is `typecheck && vite build`, so a type error in either the client
+      # or the Worker fails the deploy instead of shipping a broken bundle.
+      - run: npm run build
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

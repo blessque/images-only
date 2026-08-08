@@ -1,0 +1,16 @@
+{
+  // The Worker runs in a different runtime from src/ — it has no DOM, and it has D1/R2
+  // globals that the browser does not. Separate `types` is the only way to have both
+  // checked correctly in one repo.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    // v5 exposes a single entry point; the dated subpaths of older releases are gone.
+    "types": ["@cloudflare/workers-types"],
+    "paths": { "@/*": ["../src/*"] }
+  },
+  // Only this directory. TypeScript follows the `import type` into ../src/lib/types.ts on
+  // its own; listing ../src/lib outright drags in the BROWSER modules beside it
+  // (manifest.ts touches `document`) which cannot compile without the DOM lib.
+  "include": ["."]
+}
