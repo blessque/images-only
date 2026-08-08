@@ -377,6 +377,25 @@ selection in the alt input inside it, so you drag the row when you meant to sele
 The drop target is an insertion RULE rather than a reflowing gap: the tray is a fixed list,
 and a line reads more clearly than every row shifting under the cursor.
 
+### A migration run with `d1 execute --file` has no memory — and 0001 CORRUPTED DATA
+Shipped `001-solo-wide-medium.sql` behind `npm run db:migrate` implemented as
+`d1 execute --file`, and asserted it was idempotent. **It is not, and cannot be made so.**
+The mapping is `big→solo, medium→wide, small→medium`; after one run the old `small` rows
+are `medium`, so a second run matches them on `WHEN 'medium' THEN 'wide'` and pushes them
+again. `medium` is both an old name and a new one, so the CASE cannot distinguish a
+migrated row from an unmigrated one.
+
+The user ran it twice. 8 rows that should be `medium` became `wide`, and **the loss is
+unrecoverable** — no column separates them from the 3 rows that were legitimately `wide`.
+
+The defect was never the SQL. It was that a migration was **re-runnable at all**. Now
+applied through `wrangler d1 migrations apply`, which records each file in `d1_migrations`
+and refuses to repeat it; `migrations_dir` sits inside the D1 binding (it is not a
+top-level wrangler field). **Never invoke a migration with `d1 execute --file`.**
+
+Second-order lesson: "idempotent" is a claim to *test*, not to reason about. Running it
+twice against a scratch database would have taken thirty seconds.
+
 ### Renaming classes shipped with a MIGRATION, not a reset
 `worker/migrations/001-solo-wide-medium.sql` rebuilds the table (SQLite cannot alter a CHECK
 constraint in place) mapping big→solo, medium→wide, small→medium. Verified on the user's

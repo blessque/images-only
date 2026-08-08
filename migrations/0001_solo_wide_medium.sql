@@ -4,11 +4,16 @@
 --   medium -> wide (roughly half a row, as before)
 --   small -> medium (the densest remaining class)
 --
--- SQLite cannot alter a CHECK constraint in place, so the table is rebuilt. Run with:
---   npm run db:migrate
+-- SQLite cannot alter a CHECK constraint in place, so the table is rebuilt.
 --
--- Nothing is deployed yet, so this exists purely to save re-uploading during local
--- testing. Once production exists, migrations become the only safe way to change schema.
+-- THIS FILE IS NOT IDEMPOTENT AND CANNOT BE MADE SO. `medium` is both an old name and a
+-- new one, so the CASE cannot tell a migrated row from an unmigrated one: running it twice
+-- pushes every `small`->`medium` row on to `wide`. That is exactly what happened once, and
+-- it is unrecoverable because no column distinguishes the two groups afterwards.
+--
+-- It is therefore run through `wrangler d1 migrations apply`, which records what has been
+-- applied in `d1_migrations` and refuses to repeat it. Never invoke a migration file with
+-- `d1 execute --file` — that has no memory.
 
 CREATE TABLE images_migrated (
   id           TEXT PRIMARY KEY,

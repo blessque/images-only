@@ -21,7 +21,13 @@
       "binding": "DB",
       "database_name": "justimages",
       // Replace after: npx wrangler d1 create justimages
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      "database_id": "00000000-0000-0000-0000-000000000000",
+
+      // Applied with `wrangler d1 migrations apply`, which records each file in a
+      // `d1_migrations` table and refuses to run it twice. A migration invoked with
+      // `d1 execute --file` has NO memory of having run — and 0001 is not idempotent,
+      // which corrupted local data exactly once before this was tightened.
+      "migrations_dir": "migrations"
     }
   ],
 

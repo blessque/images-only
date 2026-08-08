@@ -37,6 +37,7 @@ npm test             # 27 unit tests: grid solver invariants + auth
 npm run verify:all   # browser suites: grid, Worker, admin end-to-end
 npm run perf         # seed 200 images and measure bytes, LCP and CLS
 npm run local:reset  # wipe local images and login attempts
+npm run db:migrate   # apply pending migrations (tracked; never re-runs one)
 ```
 
 The local admin password comes from `.dev.vars` (gitignored). Generate a real one with
