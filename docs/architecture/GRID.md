@@ -90,21 +90,25 @@ if density-based hierarchy proves insufficient in real use.
 ## The algorithm
 
 ```
-1. PACK      Append images to the current row, accumulating target fractions fᵢ.
-             Close the row when Σf ≥ 1.
+0. SOLO      If the next image is `solo`, it becomes the entire row. Skip steps 1 and 3
+             — no packing, no clamp. Its height is whatever its aspect ratio produces.
+
+1. PACK      Otherwise append images to the current row, accumulating fractions fᵢ.
+             Stop at a `solo` image: it must start the next row, never join this one.
              Overshoot rule: if adding the next image lands Σf further from 1 than
-             closing now does, close now. (A Big image never gets dragged into a
+             closing now does, close now. (A `wide` image never gets dragged into a
              row that is already 3/4 full.)
 
 2. SOLVE     H = W / Σaᵢ  ; each image's width = H · aᵢ
 
 3. FIT       If H > MAX_ROW_HEIGHT: pull the next image into the row and re-solve.
-             More images ⇒ larger Σaᵢ ⇒ smaller H.
+             More images ⇒ larger Σaᵢ ⇒ smaller H. Never pull in a `solo` image.
              If H < MIN_ROW_HEIGHT: push the last image to the next row and re-solve.
 
              This is the elegant part — the height clamp is satisfied by changing row
              MEMBERSHIP, not by cropping or by letterboxing. Both bounds are reachable
-             without ever violating constraint 1.
+             without ever violating constraint 1. The ceiling is a goal rather than a
+             guarantee, since the only image available to recruit may be `solo`.
 
 4. LAST ROW  Fills the width like any other row, whatever height results.
 ```
@@ -134,12 +138,12 @@ bug** — the entire look is meant to be tuned by editing one file.
 | Dial | Purpose | Notes |
 |---|---|---|
 | `BREAKPOINTS` | the table above | class → target width fraction, per breakpoint |
-| `MAX_ROW_HEIGHT` | ceiling before pulling in another image | guards rows of portraits |
+| `MAX_ROW_HEIGHT` | ceiling before pulling in another image | shared rows only; `solo` is exempt |
 | `MIN_ROW_HEIGHT` | floor before pushing one out | guards over-dense rows on wide screens |
 | `LAST_ROW_WARN_FACTOR` | admin warning threshold | ~1.5; UI-only, never changes layout |
 
-`MAX_ROW_HEIGHT` and the wide-screen Big fraction are the two taste dials. Tune by eye,
-record the verdict in `docs/decisions/TUNING_LOG.md`.
+`MAX_ROW_HEIGHT` and the wide-screen `medium` fraction are the two taste dials. Tune by
+eye, record the verdict in `docs/decisions/TUNING_LOG.md`.
 
 ---
 
