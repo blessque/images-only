@@ -17,7 +17,9 @@
     "hash-password": "node --experimental-strip-types scripts/hash-password.ts",
     "verify:worker": "node scripts/verify-worker.mjs",
     "db:local": "wrangler d1 execute justimages --local --file=worker/schema.sql",
-    "db:remote": "wrangler d1 execute justimages --remote --file=worker/schema.sql"
+    "db:remote": "wrangler d1 execute justimages --remote --file=worker/schema.sql",
+    "verify:admin": "node scripts/verify-admin.mjs",
+    "verify:all": "npm run verify && npm run verify:worker && npm run verify:admin"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SolvedImage } from './solve';
 import { fallbackSrc, srcSetFor } from '@/lib/imageUrl';
+import { useAdminHooks } from '@/lib/adminContext';
 
 type Status = 'loading' | 'loaded' | 'error';
 
@@ -9,6 +10,8 @@ interface TileProps {
   base: string;
   /** Above the fold: skip lazy loading and hint the fetch priority. */
   eager: boolean;
+  /** Position in the gallery, for the admin overlay's reorder arrows. */
+  index: number;
 }
 
 /**
@@ -39,8 +42,9 @@ function BrokenMark({ alt }: { alt: string }) {
   );
 }
 
-export function Tile({ solved, base, eager }: TileProps) {
+export function Tile({ solved, base, eager, index }: TileProps) {
   const [status, setStatus] = useState<Status>('loading');
+  const { renderTileOverlay } = useAdminHooks();
   const { item, width, height } = solved;
 
   return (
@@ -70,6 +74,7 @@ export function Tile({ solved, base, eager }: TileProps) {
         />
       )}
       {status === 'loading' ? <div className="tile-pulse" aria-hidden="true" /> : null}
+      {renderTileOverlay?.(item, index)}
     </div>
   );
 }

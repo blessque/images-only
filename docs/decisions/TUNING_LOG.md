@@ -227,6 +227,58 @@ real payload.
 
 ---
 
+## Decisions made — 2026-08-09 (Phase 4, admin and upload, verified in-browser)
+
+### Progressive halving before the final draw — not one big `drawImage`
+A single draw from 6000px to 400px is a 15x reduction and the browser's filter samples too
+sparsely at that ratio: fine detail aliases into shimmer, which on a photography portfolio
+reads as a bad PHOTOGRAPH rather than a bad resize. Halving until within 2x keeps every step
+inside the filter's competence. Measured result on real sources: −80% and −69% across the
+whole four-rung ladder.
+
+### Colour survives the round trip — measured, not assumed
+`display-p3` canvas where the browser reports it back (passing the attribute is a *request*,
+not a guarantee — `getContextAttributes()` is the only honest test), plus
+`colorSpaceConversion: 'none'` on decode so the decoder cannot flatten a wide-gamut source
+before we get it onto a wide-gamut canvas. Verified end-to-end: `rgb(200,30,54)` in,
+`rgb(198,27,54)` out — max channel drift **3/255**, which is WebP quantisation, not a
+colour-management error.
+
+### One long-lived compression Worker, jobs run SEQUENTIALLY
+A worker per file re-parses the module each spawn, and twenty concurrent decodes of 10MB
+photographs is how a responsive-looking tray runs the machine out of memory. One worker,
+jobs correlated by id, driven one at a time.
+
+### Never upscale a rung
+A 900px source has no 2400px version to give, and inventing one ships bytes carrying no
+information. Rungs above the source's long edge are skipped (the first rung always emits, so
+even a tiny source produces something).
+
+### Quality floor is 0.62
+Below that WebP shows visible blocking, and shipping a visibly damaged photograph to hit a
+byte target is the wrong trade on a site whose entire content is photographs. If a file
+cannot make budget at 0.62 it goes over budget instead.
+
+### The admin/public seam is a context in the MAIN chunk holding no admin code
+`src/lib/adminContext.ts` is a context and a type. `Grid`/`Tile` consume it and therefore
+never import from `src/admin/`, which is what keeps the whole admin layer behind a dynamic
+import. **Verified rather than assumed**: the e2e test asserts a normal visitor's network
+log contains no `AdminLayer` or `compressWorker` request. Built chunks: AdminLayer 13.27 kB
++ 4.32 kB CSS, worker 1.87 kB, all outside the main bundle.
+
+### `Option+\` is matched on `event.code`, not `event.key`
+Alt+Backslash on macOS produces the character `«`, so `event.key` never equals `\`. Matching
+`event.code === 'Backslash'` is the only thing that works, and it is not obvious from a
+keyboard-event tutorial.
+
+### "Every file shrinks >50%" is NOT an invariant — the test was wrong
+A solid-colour PNG is already near-optimally compressed; 11KB → 8KB across four rungs is
+~2KB each and correct. Same class of mistake as the Phase 2 `minRowHeight` floor: an
+invariant asserted over degenerate inputs it was never true for. Now: every file shrinks,
+and sources above 100KB shrink by more than half.
+
+---
+
 ## Open issues
 
 - `MAX_ROW_HEIGHT` and the wide-screen Big fraction (`1/2` vs `1/3`) are **taste dials, not

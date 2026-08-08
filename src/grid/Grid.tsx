@@ -76,6 +76,7 @@ export function Grid({ items, base }: GridProps) {
 
   const eagerCutoff = viewportHeight * EAGER_VIEWPORT_FACTOR;
   let cumulativeHeight = 0;
+  let flatIndex = -1;
 
   return (
     <div className="grid" ref={containerRef}>
@@ -88,9 +89,18 @@ export function Grid({ items, base }: GridProps) {
             key={row.images[0]?.item.id ?? rowIndex}
             style={{ height: `${row.height}px` }}
           >
-            {row.images.map((solved) => (
-              <Tile key={solved.item.id} solved={solved} base={base} eager={eager} />
-            ))}
+            {row.images.map((solved) => {
+              flatIndex += 1;
+              return (
+                <Tile
+                  key={solved.item.id}
+                  solved={solved}
+                  base={base}
+                  eager={eager}
+                  index={flatIndex}
+                />
+              );
+            })}
           </div>
         );
       })}
