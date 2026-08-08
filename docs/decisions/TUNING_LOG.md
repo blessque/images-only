@@ -277,6 +277,31 @@ A solid-colour PNG is already near-optimally compressed; 11KB → 8KB across fou
 invariant asserted over degenerate inputs it was never true for. Now: every file shrinks,
 and sources above 100KB shrink by more than half.
 
+### Inter Tight — self-hosted, subset, variable, and NOT preloaded (2026-08-09)
+Google Fonts' download button ships **TTF only** — the woff2 files exist but are served from
+their CDN and never appear in the ZIP. So the conversion is ours to do.
+
+- **The variable font, not the 18 static faces.** One file covers 100–900, so the footer's
+  regular text and the admin bar's bold share a single download. Italic is not shipped —
+  nothing on this site is italic and it is a separate ~592KB face.
+- **The 91% saving is SUBSETTING, not the woff2 container.** Inter Tight carries Latin,
+  Cyrillic, Greek, Vietnamese and a pile of symbols; the site's entire public text is one
+  footer line. Kept Latin + Cyrillic (the designer's name may well be Cyrillic), dropped the
+  rest: 567KB → **49.5KB**. A plain TTF→woff2 with no subsetting lands near 200KB.
+- **Referenced by a RELATIVE path from `styles/fonts.css`**, so Vite fingerprints it into
+  `/assets/`. A content-hashed name can be cached immutably; a stable name in `public/` has
+  to be revalidated on every visit.
+- **`font-display: swap` is safe HERE specifically** because the footer has a fixed 44px
+  height and is the only public text, so a late swap changes glyph widths inside a box whose
+  height cannot move. Verified: CLS still 0.00000 at all four breakpoints. If text ever
+  lands in a self-sizing container, re-measure before assuming this still holds.
+- **Deliberately NOT preloaded.** The font serves a footer at the *end* of the document;
+  preloading it would make it compete with the above-the-fold photographs, which are the
+  actual content.
+- Regeneration needs fonttools **and brotli** — the woff2 flavour fails with an unhelpful
+  `ImportError: No module named brotli`. The command is in `src/styles/fonts.css`.
+- OFL: the licence lives beside the file at `src/assets/fonts/OFL.txt` and must stay with it.
+
 ---
 
 ## Open issues
@@ -284,10 +309,6 @@ and sources above 100KB shrink by more than half.
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `big` fraction (1/2) are still taste dials**
   tuned against synthetic fixtures, not against his photographs. First real upload session
   should settle both; record the verdict here.
-- **Inter Tight is not yet self-hosted.** `global.css` names it first and falls back to the
-  system stack, so the site currently renders in the fallback. Add the woff2 to `public/`
-  and a `@font-face` — do NOT add a Google Fonts `<link>` (an extra DNS + TLS handshake
-  before first paint, on a site whose whole pitch is speed).
 - **Drag-to-reorder is unbuilt.** Arrows (icons and keys) work. The hard part is that a
   justified grid re-solves under the dragged item, so the drop indicator must be computed
   against the **pre-drag** layout.

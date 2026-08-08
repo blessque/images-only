@@ -1,0 +1,46 @@
+/*
+ * Inter Tight, self-hosted.
+ *
+ * NEVER a Google Fonts <link>. That costs a DNS lookup and a TLS handshake to a third-party
+ * origin before first paint, on a site whose whole pitch is speed — and it hands every
+ * visitor's IP to Google for no benefit.
+ *
+ * ONE variable font covers every weight (100–900), so the footer's regular text and the
+ * admin bar's bold share a single download instead of two static faces. Italic is not
+ * shipped: nothing on this site is italic, and it is a separate ~592KB face.
+ *
+ * Referenced by a RELATIVE path so Vite fingerprints it into /assets/ — a content-hashed
+ * filename can be cached immutably, where a stable name in public/ has to be revalidated
+ * on every visit.
+ *
+ * Regenerating (source: the Google Fonts TTF download, which never contains woff2):
+ *   pyftsubset InterTight-VariableFont_wght.ttf \
+ *     --output-file=src/assets/fonts/inter-tight.woff2 --flavor=woff2 \
+ *     --layout-features='kern,liga,clig,calt,tnum,frac' \
+ *     --unicodes='<Latin + Cyrillic, see git history for the full list>' \
+ *     --name-IDs='*' --name-legacy --name-languages='*' --drop-tables+=DSIG
+ * Needs fonttools AND brotli (the woff2 flavour fails without it). 567KB → 49.5KB.
+ *
+ * SIL Open Font License — the text lives beside the file at src/assets/fonts/OFL.txt and
+ * must stay with it in any redistribution.
+ */
+
+@font-face {
+  font-family: 'Inter Tight';
+  src: url('../assets/fonts/inter-tight.woff2') format('woff2');
+  /* The variable weight range. Declaring it is what lets one file answer every weight. */
+  font-weight: 100 900;
+  font-style: normal;
+  /*
+   * `swap` is safe here specifically because the footer has a FIXED height (44px) and is
+   * the only public text — so a late swap changes glyph widths inside a box whose height
+   * cannot move, and CLS stays at zero. If text ever lands in a self-sizing container,
+   * re-measure before assuming this still holds.
+   */
+  font-display: swap;
+  /* Latin + Cyrillic; everything else was subset away. */
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308,
+    U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2190-2193, U+2212, U+2215, U+FEFF,
+    U+FFFD, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
