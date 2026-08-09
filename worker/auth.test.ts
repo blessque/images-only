@@ -3,6 +3,8 @@ import {
   bearerFrom,
   constantTimeEqual,
   hashPassword,
+  PBKDF2_ITERATIONS,
+  PBKDF2_MAX_ITERATIONS,
   signToken,
   verifyPassword,
   verifyToken,
@@ -23,6 +25,13 @@ describe('constantTimeEqual', () => {
 });
 
 describe('password hashing', () => {
+  // The one assertion that would have caught the outage. Every other test here runs at
+  // FAST, and neither Node nor local workerd enforces the runtime cap — so the production
+  // iteration count was never actually executed until it reached the edge and threw.
+  it('stays within the Workers runtime cap on PBKDF2 iterations', () => {
+    expect(PBKDF2_ITERATIONS).toBeLessThanOrEqual(PBKDF2_MAX_ITERATIONS);
+  });
+
   it('round-trips the correct password', async () => {
     const stored = await hashPassword('correct horse battery staple', undefined, FAST);
     expect(await verifyPassword('correct horse battery staple', stored)).toBe(true);

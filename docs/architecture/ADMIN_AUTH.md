@@ -87,6 +87,12 @@ PBKDF2 via Web Crypto is used rather than bcrypt/Argon2 because it is **native t
 Workers runtime**. bcrypt would mean a WASM dependency at the edge for a single-user login;
 PBKDF2 with a high iteration count is the right trade here.
 
+**The iteration count is capped at 100,000 by the runtime, not chosen.** Above it,
+`deriveBits` throws `NotSupportedError` and the login endpoint 1101s at the edge — and
+neither the unit tests nor `wrangler dev` reproduce that, so it appears only in production.
+Do not raise it toward OWASP's 600,000; see TUNING_LOG. Note also that the count lives
+inside each stored hash, so changing it requires regenerating and re-uploading the secret.
+
 ## Password reset is deliberately unbuilt
 
 The user asked whether email reset was overengineering. **It is, and the reasoning is worth

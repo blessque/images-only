@@ -556,6 +556,39 @@ also makes them the exit route if the site ever moves to a Russian host.
 
 ---
 
+## Decisions made — 2026-08-09 (first production login)
+
+### PBKDF2 is pinned at 100,000 iterations — a runtime ceiling, not a taste dial
+Shipped at 210,000 on OWASP's guidance. The Workers runtime **hard-caps PBKDF2 at 100,000**
+and throws `NotSupportedError` above it, so every production login returned a 1101 edge
+exception and the client reported it as "Incorrect password" — `api.ts:25` falls back to
+that string for any non-OK response. Roughly two hours were spent suspecting the password,
+the hash, shell expansion and Unicode normalisation before `wrangler tail` simply said it.
+
+**Do not raise this back toward 600,000.** It does not cost more, it takes the login
+endpoint down. `PBKDF2_MAX_ITERATIONS` and a unit test now pin it.
+
+Why nothing caught it, which is the more useful half: the unit tests run at `FAST = 1000`
+deliberately, so the production constant was **never executed by any test**; Node's Web
+Crypto has no cap; and local `workerd` under `wrangler dev` does not enforce it either. The
+value was therefore unreachable by every layer of the suite — the same shape as iteration 2's
+CLS bug and iteration 3's routing bug, and the third time this project has confirmed that a
+green suite one level down says nothing about the level above.
+
+The security cost is real and accepted: 100,000 is below current OWASP guidance. The
+compensating controls are the rate limiter (8 attempts / 15 min), the 12-character minimum,
+and a single user with no enumeration surface. Argon2 or bcrypt would clear the bar but mean
+shipping WASM to the edge for one login, which ADMIN_AUTH.md already rejected and which this
+does not reopen.
+
+### The stored hash carries its own iteration count — so lowering it is not enough
+`verifyPassword` reads the count out of the stored string, not from the constant. An existing
+`pbkdf2$210000$…` secret keeps throwing after the code is fixed. **Changing the cost factor
+always requires regenerating and re-uploading the hash**, which is the one direction the
+self-describing format does not make free.
+
+---
+
 ## Open issues
 
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `tight` fraction (1/4) are still taste
@@ -567,13 +600,20 @@ also makes them the exit route if the site ever moves to a Russian host.
 - **Drag-to-reorder is unbuilt.** Arrows (icons and keys) work. The hard part is that a
   justified grid re-solves under the dragged item, so the drop indicator must be computed
   against the **pre-drag** layout.
-- **Orphaned R2 objects are not reaped.** Metadata is written last on purpose, so orphans
-  are the designed failure mode — invisible and cheap, versus a manifest row pointing at a
-  missing image. Soft-deleted rows also keep their bytes so undo works. A sweep past the
-  30-day window is a maintenance task, not a correctness one.
-- **Nothing is deployed.** Needs a Cloudflare account, `wrangler d1 create justimages`, an
-  R2 bucket, the real `database_id` in `wrangler.jsonc`, and two `wrangler secret put`
-  calls. No domain chosen; `*.workers.dev` works until one is.
+- **Orphaned storage objects are not reaped.** Metadata is written last on purpose, so
+  orphans are the designed failure mode — invisible and cheap, versus a manifest row
+  pointing at a missing image. Soft-deleted rows also keep their bytes so undo works. A
+  sweep past the 30-day window is a maintenance task, not a correctness one.
+- **`hash-password.ts` prints its `.dev.vars` line in double quotes**, which zsh expands —
+  `pbkdf2$210000$SALT$DIGEST` collapses to the literal `pbkdf2`. Single quotes, a `--bare`
+  mode writing the hash to a file for `wrangler secret put … < file`, or both. Until then
+  the workaround is: paste at wrangler's prompt only, and check the asterisk count is ~80.
+- **The gallery is empty in production.** `export/` holds a test set (Unsplash, ChatGPT
+  images, a real phone number in `settings`) and is deliberately **not** imported. The real
+  photographs go in by drag-and-drop.
+- **Live at `https://justimages.blessque.workers.dev`.** The workers.dev subdomain is
+  account-wide and changing it breaks every existing link. No custom domain chosen yet.
 - **`.dev.vars` currently holds a throwaway local password** (`test-password-1234`) so the
   verification scripts can run. It is gitignored and never leaves the machine, but it is
-  not a secret and must not be reused in production.
+  not a secret and must not be reused in production. Note its hash is still at 210,000
+  iterations, which local `workerd` tolerates — regenerate it if local login ever matters.

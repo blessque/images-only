@@ -11,8 +11,22 @@
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** OWASP guidance for PBKDF2-HMAC-SHA256. Raising it invalidates nothing — the count is stored. */
-export const PBKDF2_ITERATIONS = 210_000;
+/**
+ * The Workers runtime HARD-CAPS PBKDF2 at 100,000 iterations. Above it, `deriveBits` throws
+ * `NotSupportedError` — so a higher value does not "cost more", it takes the login endpoint
+ * down with a 1101 at the edge. Do NOT raise this to match OWASP's 600,000; it cannot run.
+ *
+ * Neither the unit tests nor `wrangler dev` enforce the cap (Node's Web Crypto has none, and
+ * local workerd does not apply it), so this is invisible everywhere except production. It
+ * was shipped at 210,000 and every login crashed until the live logs said so.
+ *
+ * The count travels inside each stored hash, so changing it here only affects NEW hashes —
+ * an existing `pbkdf2$210000$…` still throws and must be regenerated.
+ */
+export const PBKDF2_ITERATIONS = 100_000;
+
+/** The runtime's ceiling. Asserted in the test suite, because nothing else catches it. */
+export const PBKDF2_MAX_ITERATIONS = 100_000;
 
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = '';
