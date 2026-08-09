@@ -54,7 +54,17 @@ export const QUALITY_FLOOR = 0.62;
 /** How far the quality search steps down per attempt. */
 export const QUALITY_STEP = 0.06;
 
-/** Formats we will pass through untouched, mapped to the extension used in R2 keys. */
+/**
+ * Workers KV's free-tier write budget, per UTC day.
+ *
+ * Each variant is one write, so 200 photographs at four rungs is 800 — a full first upload
+ * fits inside a single day, but only just. A larger batch would fail part way through with
+ * no explanation, so the tray warns before publishing. It does not block: it is his call,
+ * and splitting across two days costs nothing.
+ */
+export const DAILY_WRITE_BUDGET = 1000;
+
+/** Formats we will pass through untouched, mapped to the extension used in storage keys. */
 export const PASSTHROUGH_FORMATS: Record<string, string> = {
   'image/webp': 'webp',
   'image/jpeg': 'jpg',

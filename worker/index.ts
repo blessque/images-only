@@ -1,4 +1,5 @@
 import { VARIANT_WIDTHS, type ImageItem, type SizeClass } from '../src/lib/types';
+import { getObject, putObject, type StorageEnv } from './storage';
 import { bearerFrom, signToken, verifyPassword, verifyToken } from './auth';
 import { clearAttempts, clientKey, registerAttempt } from './rateLimit';
 import {
@@ -12,9 +13,8 @@ import {
   updateSettings,
 } from './images';
 
-export interface Env {
+export interface Env extends StorageEnv {
   DB: D1Database;
-  BUCKET: R2Bucket;
   ASSETS: Fetcher;
   ADMIN_PASSWORD_HASH: string;
   TOKEN_SECRET: string;
@@ -125,7 +125,7 @@ async function serveImage(url: URL, env: Env): Promise<Response> {
   const resolved = resolveImagePath(url.pathname);
   if (!resolved) return new Response('Not found', { status: 404 });
 
-  const object = await env.BUCKET.get(resolved.key);
+  const object = await getObject(env, resolved.key);
   if (!object) return new Response('Not found', { status: 404 });
 
   return new Response(object.body, {
@@ -135,7 +135,7 @@ async function serveImage(url: URL, env: Env): Promise<Response> {
       // overwrites. An overwritten object behind this header is a stale image that no
       // purge can reach. See docs/architecture/IMAGE_PIPELINE.md.
       'cache-control': IMMUTABLE,
-      etag: object.httpEtag,
+      etag: object.etag,
     },
   });
 }
@@ -175,13 +175,15 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
   const resolved = resolveImagePath(url.pathname.replace('/api/upload/', '/img/'));
   if (!resolved) return json({ error: 'Bad variant' }, 400);
 
-  const length = Number(request.headers.get('content-length') ?? '0');
-  if (length > MAX_UPLOAD_BYTES) return json({ error: 'Too large' }, 413);
   if (!request.body) return json({ error: 'Empty body' }, 400);
 
-  await env.BUCKET.put(resolved.key, request.body, {
-    httpMetadata: { contentType: resolved.contentType, cacheControl: IMMUTABLE },
-  });
+  // Measured on the ACTUAL bytes, not on a client-supplied content-length header — the
+  // header is a claim, and this is the thing the limit is supposed to be about.
+  const bytes = await request.arrayBuffer();
+  if (bytes.byteLength === 0) return json({ error: 'Empty body' }, 400);
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) return json({ error: 'Too large' }, 413);
+
+  await putObject(env, resolved.key, bytes, resolved.contentType, IMMUTABLE);
   return json({ ok: true });
 }
 

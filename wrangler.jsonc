@@ -31,12 +31,37 @@
     }
   ],
 
-  "r2_buckets": [
+  // Image bytes live in Workers KV, NOT R2 — R2 requires a credit card on the account and
+  // KV does not. Free tier: 1GB stored, 100k reads/day, 1,000 writes/day. 200 photos at
+  // four variants is ~300MB and 800 writes, so a full first upload fits inside one day.
+  //
+  // KV is EVENTUALLY CONSISTENT (up to ~60s worldwide), which is why Tile.tsx retries a
+  // failed image before showing the broken mark.
+  "kv_namespaces": [
     {
-      "binding": "BUCKET",
-      "bucket_name": "justimages"
+      "binding": "IMAGES",
+      "id": "2bed4c9439cf4a6693b36678bfe6b72d",
+      "preview_id": "3e7a51690ad14fd1a4f19f52fdaacd9b"
     }
   ],
+
+  // R2 is BETTER when it is available — 10GB, no daily write cap, purpose-built for blobs.
+  // `worker/storage.ts` still implements it and prefers it whenever the binding exists, so
+  // switching back is exactly this:
+  //
+  //   1. enable R2 once in the Cloudflare dashboard (needs a card)
+  //   2. npx wrangler r2 bucket create justimages
+  //   3. uncomment the block below
+  //   4. npm run export && npm run import   (carries the photographs across)
+  //
+  // No code changes. The R2-era build is also tagged `r2-reference`.
+  //
+  // "r2_buckets": [
+  //   {
+  //     "binding": "BUCKET",
+  //     "bucket_name": "justimages"
+  //   }
+  // ],
 
   "observability": { "enabled": true }
 

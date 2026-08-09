@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SIZE_CLASSES, type SizeClass } from '@/lib/types';
 import { canPassThrough, formatBytes, type StagedFile } from './staging';
+import { DAILY_WRITE_BUDGET } from './compressParams';
 
 interface UploadTrayProps {
   staged: StagedFile[];
@@ -38,6 +39,13 @@ export function UploadTray({
   const ready = staged.filter((file) => file.status === 'ready').length;
   const failed = staged.filter((file) => file.status === 'error').length;
 
+  // Every variant is one storage write, and the free tier allows 1,000 a day. A batch that
+  // would exceed it fails part way through with nothing to explain why, so say so first.
+  const writes = staged
+    .filter((file) => file.status === 'ready')
+    .reduce((total, file) => total + file.variants.length, 0);
+  const overBudget = writes > DAILY_WRITE_BUDGET;
+
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
@@ -65,6 +73,14 @@ export function UploadTray({
           {publishing ? 'Publishing…' : `Publish ${ready}`}
         </button>
       </header>
+
+      {overBudget ? (
+        <p className="tray-budget" role="status">
+          This batch is {writes} uploads and the free storage tier allows{' '}
+          {DAILY_WRITE_BUDGET.toLocaleString('en-US')} a day. Publish some of it tomorrow, or
+          the last images will fail with no explanation.
+        </p>
+      ) : null}
 
       <ul className="tray-list">
         {staged.map((file, index) => (

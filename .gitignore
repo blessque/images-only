@@ -28,3 +28,6 @@ memory/
 
 # Browser verification screenshots
 /.screens/
+
+# Gallery exports — your photographs, not source code
+/export/

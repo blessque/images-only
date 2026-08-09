@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SolvedImage } from './solve';
 import { fallbackSrc, srcSetFor } from '@/lib/imageUrl';
 import { useAdminHooks } from '@/lib/adminContext';
+import { IMAGE_RETRY_DELAYS_MS } from './gridParams';
 
 type Status = 'loading' | 'loaded' | 'error';
 
@@ -44,10 +45,35 @@ function BrokenMark({ alt }: { alt: string }) {
 
 export function Tile({ solved, base, eager, index }: TileProps) {
   const [status, setStatus] = useState<Status>('loading');
+  const [attempt, setAttempt] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { renderTileOverlay } = useAdminHooks();
   const { item, width, height } = solved;
   // Null for a passthrough image — one object, so `src` alone is the whole story.
   const srcSet = srcSetFor(base, item);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
+
+  /**
+   * KV takes up to ~60s to propagate worldwide, so a just-published photograph can 404 for
+   * the very person who uploaded it. Retry a few times before calling it broken.
+   *
+   * The `?r=` suffix appears ONLY on a retry: a browser may cache the 404, and without a
+   * new URL the retry would be answered from that cache rather than the network. The first
+   * request stays a clean immutable URL.
+   */
+  function handleError() {
+    const delay = IMAGE_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) {
+      setStatus('error');
+      return;
+    }
+    timerRef.current = setTimeout(() => setAttempt((current) => current + 1), delay);
+  }
+
+  const retrySuffix = attempt > 0 ? `?r=${attempt}` : '';
 
   return (
     <div className="tile" style={{ width: `${width}px`, height: `${height}px` }}>
@@ -56,10 +82,13 @@ export function Tile({ solved, base, eager, index }: TileProps) {
       ) : (
         <img
           className={status === 'loaded' ? 'tile-img is-loaded' : 'tile-img'}
-          src={fallbackSrc(base, item)}
+          key={attempt}
+          src={`${fallbackSrc(base, item)}${retrySuffix}`}
           {...(srcSet
             ? {
-                srcSet,
+                srcSet: retrySuffix
+                  ? srcSet.replace(/\.webp /g, `.webp${retrySuffix} `)
+                  : srcSet,
                 /*
                  * The exact solved CSS width, not a guessed media query. We know it, and
                  * a guess here is the standard way responsive images silently fetch the
@@ -75,7 +104,7 @@ export function Tile({ solved, base, eager, index }: TileProps) {
           decoding="async"
           fetchPriority={eager ? 'high' : 'auto'}
           onLoad={() => setStatus('loaded')}
-          onError={() => setStatus('error')}
+          onError={handleError}
           draggable={false}
         />
       )}

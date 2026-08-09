@@ -511,6 +511,51 @@ handshake was affected. Disconnecting the VPN fixed it immediately.
 
 ---
 
+## Decisions made — 2026-08-09 (iteration 13: R2 blocked by a credit card, moved to KV)
+
+### Storage is behind an interface now, and R2 was NOT forked away
+Enabling R2 requires a card on the account; the user has none available. Workers KV needs
+none (1 GB, 100k reads/day, 1,000 writes/day, free forever, commercial use allowed).
+
+The user asked to fork the R2 build and keep it as the reference. **A fork over a 3-line
+difference would have been pure overhead and would have rotted.** Instead `worker/storage.ts`
+implements both and prefers R2 whenever its binding exists, the config block sits commented
+with the four steps to re-enable, and the commit is tagged `r2-reference`. Switching back
+later is configuration, not a merge.
+
+The swap cost 3 lines because `worker/` and `src/` have shared **types only** since day one.
+All 7 mentions of R2 in `src/` were comments. That rule earned its keep here.
+
+### KV has no ETag, so it is derived from the key — and that is correct, not a fudge
+Keys are immutable by construction: written once, and "replace image" mints a new id. A key
+therefore identifies its bytes for ever, so `W/"{key}"` is a truthful validator and 304s
+keep working.
+
+### Upload size is now measured on the actual bytes
+Moving to `arrayBuffer()` for KV made it natural to check the real length instead of the
+client's `content-length` header. The header is a claim; the limit is supposed to be about
+the bytes. Small correctness win, taken while passing.
+
+### `Tile.tsx` retries before declaring an image broken
+KV is eventually consistent (~60s worldwide), so a freshly published photograph can 404 for
+its own uploader — which would render the broken-image mark and look exactly like the
+srcset bug of iteration 7. Three retries on a backoff, with `?r=n` **only** on retries
+because a browser may cache the 404 and would otherwise answer the retry from that cache.
+Worth having on any backend: it also covers ordinary transient network failure.
+
+### The tray warns when a batch exceeds the daily write budget
+1,000 writes/day is the real constraint — 200 photographs at four variants is 800. A larger
+batch fails part way through with nothing to explain why. The warning does not block:
+splitting across two days costs nothing and the decision is his.
+
+### `export` / `import` are a FEATURE, not a migration script
+They were needed to carry the local gallery from R2 to KV, but they are specced as data
+portability: his photographs are his, and he should be able to take them out. Because they
+speak only to the public HTTP API they work against any deployment and any backend, which
+also makes them the exit route if the site ever moves to a Russian host.
+
+---
+
 ## Open issues
 
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `tight` fraction (1/4) are still taste

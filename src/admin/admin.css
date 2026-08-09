@@ -432,3 +432,13 @@
 .tray-untouched {
   color: #7f93a8;
 }
+
+/* Daily write-budget warning. Advice, not a block — splitting a batch across two days
+   costs nothing, and the decision is his. */
+.tray-budget {
+  margin: 0;
+  padding: 8px 12px;
+  background: #17130a;
+  border-bottom: 1px solid #3a2f16;
+  color: #b99a52;
+}

@@ -57,6 +57,17 @@ export const MIN_ROW_HEIGHT_PX = 160;
  */
 export const LAST_ROW_WARN_FACTOR = 1.5;
 
+/**
+ * Backoff before a failed image is declared broken.
+ *
+ * Workers KV is EVENTUALLY CONSISTENT — up to ~60s worldwide — so a photograph published
+ * seconds ago can genuinely 404 for its own uploader. Showing the broken-image mark then
+ * would look exactly like the srcset bug of iteration 7, and be wrong.
+ *
+ * Also earns its keep on any backend: it covers ordinary transient network failure.
+ */
+export const IMAGE_RETRY_DELAYS_MS = [1000, 3000, 8000] as const;
+
 export function fractionsFor(containerWidth: number): Record<SizeClass, number> {
   let chosen = BREAKPOINTS[0];
   for (const bp of BREAKPOINTS) {

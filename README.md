@@ -37,6 +37,8 @@ npm test             # 27 unit tests: grid solver invariants + auth
 npm run verify:all   # browser suites: grid, Worker, admin end-to-end
 npm run perf         # seed 200 images and measure bytes, LCP and CLS
 npm run local:reset  # wipe local images and login attempts
+npm run export       # download the whole gallery — photographs and metadata
+npm run import       # restore an export (also how the site changes storage or host)
 npm run db:migrate   # apply pending migrations (tracked; never re-runs one)
                      # migrations/ is the ONLY definition of the schema
 ```
@@ -51,8 +53,7 @@ Needs a free Cloudflare account, then once:
 ```bash
 npx wrangler login                    # fails behind a VPN — Cloudflare challenges datacenter IPs
 npx wrangler d1 create justimages     # paste database_id into wrangler.jsonc
-# enable R2 once in the dashboard, then:
-npx wrangler r2 bucket create justimages
+npx wrangler kv namespace create IMAGES   # image bytes; R2 needs a card, KV does not
 npm run db:remote                     # apply migrations to production
 npm run hash-password                 # then `wrangler secret put` both values
 ```
