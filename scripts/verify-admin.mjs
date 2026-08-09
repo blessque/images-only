@@ -12,7 +12,7 @@
 import { chromium } from 'playwright-core';
 import { execFile } from 'node:child_process';
 import { spawn } from 'node:child_process';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import path from 'node:path';
 
@@ -66,6 +66,13 @@ async function makeSources() {
     '-y', '-hide_banner', '-loglevel', 'error',
     '-f', 'lavfi', '-i', 'testsrc2=s=1024x1024',
     '-frames:v', '1', path.join(UPLOADS, 'small_1024.png'),
+  ]);
+  // Comfortably under the 150KB passthrough threshold AND already WebP — the exact case
+  // where re-encoding costs quality and buys nothing.
+  await run('ffmpeg', [
+    '-y', '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'testsrc2=s=600x400',
+    '-frames:v', '1', '-c:v', 'libwebp', '-quality', '80', path.join(UPLOADS, 'tiny.webp'),
   ]);
 }
 
@@ -140,13 +147,59 @@ async function main() {
       path.join(UPLOADS, 'IMG_4821.png'),
       path.join(UPLOADS, 'swatch.png'),
       path.join(UPLOADS, 'small_1024.png'),
+      path.join(UPLOADS, 'tiny.webp'),
     ]);
     await page.waitForFunction(
-      () => document.querySelectorAll('.tray-item.is-ready').length === 4,
+      () => document.querySelectorAll('.tray-item.is-ready').length === 5,
       undefined,
       { timeout: 120_000 },
     );
-    check(true, 'all four files compress in the Web Worker');
+    check(true, 'all five files compress in the Web Worker');
+
+    // ── No compression, for files already small enough ───────────────────────
+    console.log('\nNo compression');
+    const boxes = await page.evaluate(() =>
+      [...document.querySelectorAll('.tray-item')].map((item) => ({
+        label: item.querySelector('.tray-fidelity')?.textContent?.trim() ?? '',
+        checked: item.querySelector('.tray-fidelity input')?.checked ?? false,
+        untouched: item.querySelector('.tray-untouched') !== null,
+      })),
+    );
+    check(
+      boxes.slice(0, 2).every((b) => b.label === 'High fidelity' && !b.checked),
+      'large files still offer "High fidelity", unchecked',
+      JSON.stringify(boxes.slice(0, 2)),
+    );
+    check(
+      boxes.slice(2).every((b) => b.label === 'No compression' && b.checked),
+      'files under 150KB offer "No compression", pre-CHECKED',
+      JSON.stringify(boxes.slice(2)),
+    );
+    check(
+      boxes.slice(2).every((b) => b.untouched),
+      'and report their size as untouched rather than a fake before/after',
+    );
+
+    // Unchecking must actually run the ladder. Do it for the two that later tests need
+    // laddered — the colour swatch and the small source whose maxRung is asserted.
+    for (const nth of [3, 4]) {
+      await page.uncheck(`.tray-item:nth-child(${nth}) .tray-fidelity input`);
+    }
+    await page.waitForFunction(
+      () => document.querySelectorAll('.tray-item.is-ready').length === 5,
+      undefined,
+      { timeout: 120_000 },
+    );
+    const afterUncheck = await page.evaluate(() =>
+      [...document.querySelectorAll('.tray-item')].map(
+        (item) => item.querySelector('.tray-untouched') === null,
+      ),
+    );
+    check(
+      afterUncheck[2] === true && afterUncheck[3] === true,
+      'unchecking it runs the normal ladder instead',
+    );
+    check(afterUncheck[4] === true ? false : true, 'the untouched file stays untouched');
 
     const sizes = await page.evaluate(() =>
       [...document.querySelectorAll('.tray-item')].map((item) => ({
@@ -154,6 +207,9 @@ async function main() {
         after: item.querySelector('.tray-after')?.textContent ?? '',
         saved: item.querySelector('.tray-saved')?.textContent ?? '',
         alt: item.querySelector('.tray-alt')?.value ?? '',
+        // A passthrough row reports one number and no saving, deliberately — nothing was
+        // re-encoded, so a before/after would be theatre.
+        untouched: item.querySelector('.tray-untouched') !== null,
       })),
     );
     console.log(`  · ${sizes.map((s) => `${s.before}→${s.after} ${s.saved}`).join('  |  ')}`);
@@ -166,12 +222,15 @@ async function main() {
       const value = Number.parseFloat(text);
       return text.includes('MB') ? value * 1024 * 1024 : text.includes('KB') ? value * 1024 : value;
     };
+    // Only COMPRESSED rows can be held to a shrinkage bar. A passthrough reports no
+    // saving by design, so asserting one over it is asserting against the feature.
+    const compressed = sizes.filter((s) => !s.untouched);
     check(
-      sizes.every((s) => parsePercent(s.saved) > 0),
-      'every file shrinks, with honest before/after byte counts',
+      compressed.every((s) => parsePercent(s.saved) > 0),
+      'every compressed file shrinks, with honest before/after byte counts',
     );
     check(
-      sizes
+      compressed
         .filter((s) => parseBytes(s.before) > 100 * 1024)
         .every((s) => parsePercent(s.saved) > 50),
       'photographic sources shrink by more than half across the whole ladder',
@@ -215,14 +274,32 @@ async function main() {
     const before = (await (await fetch(`${BASE}/api/images`)).json()).images.length;
     await page.click('.tray-primary');
     await page.waitForFunction(
-      (n) => document.querySelectorAll('.tile').length === n + 4,
+      (n) => document.querySelectorAll('.tile').length === n + 5,
       before,
       { timeout: 120_000 },
     );
-    check(true, `four images publish and appear in the grid (${before} → ${before + 4})`);
+    check(true, `five images publish and appear in the grid (${before} → ${before + 5})`);
 
     const manifest = await (await fetch(`${BASE}/api/images`)).json();
-    check(manifest.images.length === before + 4, 'and they persist in the manifest');
+    check(manifest.images.length === before + 5, 'and they persist in the manifest');
+
+    // ── The passthrough object ───────────────────────────────────────────────
+    const passed = manifest.images.find((image) => image.passthrough);
+    check(passed !== undefined, 'the untouched file is recorded as a passthrough');
+    if (passed) {
+      check(passed.format === 'webp', `and keeps its own format (${passed.format})`);
+      const original = await readFile(path.join(UPLOADS, 'tiny.webp'));
+      const served = await fetch(`${BASE}/img/${passed.id}/full.${passed.format}`);
+      check(served.ok, `its single object serves from R2 (${served.status})`);
+      check(
+        served.headers.get('content-type') === 'image/webp',
+        `served under its true content type (${served.headers.get('content-type')})`,
+      );
+      check(
+        (await served.arrayBuffer()).byteLength === original.byteLength,
+        'BYTE-IDENTICAL to the source — nothing was re-encoded',
+      );
+    }
 
     const small = manifest.images.find((image) => image.maxRung < 2400);
     check(

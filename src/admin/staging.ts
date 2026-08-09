@@ -1,5 +1,6 @@
 import type { SizeClass } from '@/lib/types';
 import type { VariantResult } from './compressWorker';
+import { PASSTHROUGH_MAX_BYTES, formatFor } from './compressParams';
 
 export type StagedStatus = 'queued' | 'compressing' | 'ready' | 'uploading' | 'done' | 'error';
 
@@ -13,6 +14,10 @@ export interface StagedFile {
   sizeClass: SizeClass;
   alt: string;
   highFidelity: boolean;
+  /** Upload the source bytes untouched. Auto-checked for small files. */
+  noCompression: boolean;
+  /** Extension the bytes go to R2 under — the source's own when passing through. */
+  format: string;
   variants: VariantResult[];
   sourceBytes: number;
   compressedBytes: number;
@@ -48,6 +53,16 @@ export function formatBytes(bytes: number): string {
 
 export function totalBytes(variants: VariantResult[]): number {
   return variants.reduce((sum, variant) => sum + variant.blob.size, 0);
+}
+
+/**
+ * Small enough that compressing it costs quality and buys nothing — so the checkbox on
+ * this row becomes "No compression", pre-checked. Also requires a format we can serve
+ * back verbatim: a TIFF has to go through the ladder whatever its size, because no
+ * browser will render the original.
+ */
+export function canPassThrough(file: File): boolean {
+  return file.size < PASSTHROUGH_MAX_BYTES && formatFor(file) !== null;
 }
 
 export const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/tiff'];

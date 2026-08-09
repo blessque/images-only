@@ -9,6 +9,11 @@ export function variantUrl(base: string, id: string, rung: number): string {
   return `${base}/${id}/${rung}.webp`;
 }
 
+/** The single untouched object for a passthrough image. */
+export function passthroughUrl(base: string, item: ImageItem): string {
+  return `${base}/${item.id}/full.${item.format}`;
+}
+
 /**
  * The real pixel width of a rung, which is NOT the rung number for portraits.
  *
@@ -35,7 +40,12 @@ export function availableRungs(item: ImageItem): number[] {
   return rungs.length > 0 ? rungs : [VARIANT_WIDTHS[0] ?? 400];
 }
 
-export function srcSetFor(base: string, item: ImageItem): string {
+/**
+ * Returns null for a passthrough image: there is exactly one object, so `src` alone is
+ * correct and a one-entry srcset would only invite a wrong `sizes` to matter.
+ */
+export function srcSetFor(base: string, item: ImageItem): string | null {
+  if (item.passthrough) return null;
   return availableRungs(item)
     .map((rung) => `${variantUrl(base, item.id, rung)} ${variantPixelWidth(rung, item.aspect)}w`)
     .join(', ');
@@ -43,6 +53,7 @@ export function srcSetFor(base: string, item: ImageItem): string {
 
 /** Fallback for browsers ignoring srcset — the middle rung, clamped to what exists. */
 export function fallbackSrc(base: string, item: ImageItem): string {
+  if (item.passthrough) return passthroughUrl(base, item);
   const rungs = availableRungs(item);
   return variantUrl(base, item.id, rungs[1] ?? rungs[0] ?? 400);
 }

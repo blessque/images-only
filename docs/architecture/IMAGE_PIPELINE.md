@@ -35,6 +35,34 @@ ffmpeg stays installed on the dev machine (v8.0) for one-off batch work. That is
 
 ---
 
+## Below 150KB, nothing is re-encoded at all
+
+A file already under `PASSTHROUGH_MAX_BYTES` (150KB) is uploaded **untouched**: one object,
+no ladder, no re-encode. Re-encoding an already-compressed 52KB WebP costs quality and buys
+nothing, and the canvas API has **no lossless WebP mode** — `quality: 1` is still lossy — so
+passing the original bytes through is the only way to lose literally nothing.
+
+Such an image is stored once at `{id}/full.{format}` under its **own** extension and served
+with its true content type. `passthrough` and `format` travel on the manifest row; the
+client emits no `srcset` for it, because one object means `src` alone is the whole story
+and a one-entry srcset only invites a wrong `sizes` to matter.
+
+The image is still decoded, but **only to read its dimensions** — the grid needs those to
+reserve the tile before anything loads. Nothing is drawn.
+
+Two things worth knowing:
+
+- **The threshold is bytes, not pixels.** A flat 4000px PNG can sit under 150KB and will be
+  served at full size. Transfer cost — the thing the threshold actually measures — is
+  unaffected; only decode cost is, and lazy loading keeps that off the critical path.
+- **EXIF survives.** The ladder strips GPS and camera serials for free as a side effect of
+  re-encoding; a passthrough does not. Worth knowing before passing a camera original through.
+
+It is a **checkbox, pre-checked**, not an automatic rule — because a small file that *is*
+worth re-encoding (a 120KB PNG that would halve as WebP) stays the user's call. Unchecking
+runs the normal ladder. This is still not the rejected global "skip compression" switch: it
+is per image, reversible, and its default is the right answer for the file in front of it.
+
 ## Resize first, quality second
 
 This is the rule that most compression work gets backwards.

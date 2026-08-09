@@ -59,6 +59,15 @@ export class AdminApi {
     });
   }
 
+  /** A passthrough image: one object, the source bytes, under its own extension. */
+  uploadOriginal(id: string, format: string, blob: Blob): Promise<unknown> {
+    return this.send(`/api/upload/${id}/full.${format}`, {
+      method: 'PUT',
+      headers: this.auth(),
+      body: blob,
+    });
+  }
+
   createImage(item: ImageItem): Promise<unknown> {
     return this.send('/api/images', {
       method: 'POST',

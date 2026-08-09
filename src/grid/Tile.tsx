@@ -46,6 +46,8 @@ export function Tile({ solved, base, eager, index }: TileProps) {
   const [status, setStatus] = useState<Status>('loading');
   const { renderTileOverlay } = useAdminHooks();
   const { item, width, height } = solved;
+  // Null for a passthrough image — one object, so `src` alone is the whole story.
+  const srcSet = srcSetFor(base, item);
 
   return (
     <div className="tile" style={{ width: `${width}px`, height: `${height}px` }}>
@@ -55,13 +57,17 @@ export function Tile({ solved, base, eager, index }: TileProps) {
         <img
           className={status === 'loaded' ? 'tile-img is-loaded' : 'tile-img'}
           src={fallbackSrc(base, item)}
-          srcSet={srcSetFor(base, item)}
-          /*
-           * The exact solved CSS width, not a guessed media query. We know it, and a
-           * guess here is the standard way responsive images silently fetch the wrong
-           * variant. See docs/architecture/GRID.md.
-           */
-          sizes={`${width}px`}
+          {...(srcSet
+            ? {
+                srcSet,
+                /*
+                 * The exact solved CSS width, not a guessed media query. We know it, and
+                 * a guess here is the standard way responsive images silently fetch the
+                 * wrong variant. See docs/architecture/GRID.md.
+                 */
+                sizes: `${width}px`,
+              }
+            : {})}
           alt={item.alt}
           width={width}
           height={Math.round(height)}

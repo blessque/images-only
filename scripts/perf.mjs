@@ -79,6 +79,8 @@ async function seed(token) {
         sizeClass: CLASSES[index % CLASSES.length],
         alt: source.alt,
         maxRung: RUNGS[RUNGS.length - 1],
+        passthrough: false,
+        format: 'webp',
       }),
     });
     if (index % 25 === 0) process.stdout.write('.');

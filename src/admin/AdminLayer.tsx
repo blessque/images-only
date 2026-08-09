@@ -7,7 +7,14 @@ import { UnlockDialog } from './UnlockDialog';
 import { UploadTray } from './UploadTray';
 import { TileControls } from './TileControls';
 import { useCompressor } from './useCompressor';
-import { altFromFilename, isAcceptedImage, totalBytes, type StagedFile } from './staging';
+import {
+  altFromFilename,
+  canPassThrough,
+  isAcceptedImage,
+  totalBytes,
+  type StagedFile,
+} from './staging';
+import { formatFor } from './compressParams';
 import './admin.css';
 
 interface AdminLayerProps {
@@ -83,17 +90,25 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
   }, []);
 
   const runCompression = useCallback(
-    async (jobId: string, file: File, highFidelity: boolean) => {
+    async (jobId: string, file: File, options: { highFidelity: boolean; noCompression: boolean }) => {
       patchStaged(jobId, { status: 'compressing', rung: null, error: undefined });
       try {
-        const outcome = await compress(jobId, file, highFidelity, (rung) =>
-          patchStaged(jobId, { rung }),
+        const outcome = await compress(
+          jobId,
+          file,
+          {
+            mode: options.noCompression ? 'passthrough' : 'ladder',
+            highFidelity: options.highFidelity,
+            format: formatFor(file) ?? 'webp',
+          },
+          (rung) => patchStaged(jobId, { rung }),
         );
         patchStaged(jobId, {
           status: 'ready',
           aspect: outcome.aspect,
           variants: outcome.variants,
           compressedBytes: totalBytes(outcome.variants),
+          format: outcome.format,
           rung: null,
         });
       } catch (cause) {
@@ -120,6 +135,10 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
         sizeClass: 'medium',
         alt: altFromFilename(file.name),
         highFidelity: false,
+        // Pre-checked for anything already small enough that re-encoding it would only
+        // cost quality. The user can uncheck it to run the ladder anyway.
+        noCompression: canPassThrough(file),
+        format: formatFor(file) ?? 'webp',
         variants: [],
         sourceBytes: file.size,
         compressedBytes: 0,
@@ -130,7 +149,10 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
       // Sequential on purpose: twenty concurrent decodes of 10MB photographs is how a
       // responsive-looking tray runs the machine out of memory.
       for (const entry of entries) {
-        await runCompression(entry.jobId, entry.file, entry.highFidelity);
+        await runCompression(entry.jobId, entry.file, {
+          highFidelity: entry.highFidelity,
+          noCompression: entry.noCompression,
+        });
       }
     },
     [runCompression],
@@ -148,7 +170,27 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
       const entry = stagedRef.current.find((file) => file.jobId === jobId);
       if (!entry) return;
       patchStaged(jobId, { highFidelity });
-      void runCompression(jobId, entry.file, highFidelity);
+      void runCompression(jobId, entry.file, { highFidelity, noCompression: false });
+    },
+    [patchStaged, runCompression],
+  );
+
+  /**
+   * "No compression" — upload the source bytes untouched.
+   *
+   * Unchecking it runs the normal ladder, which is the only reason it is a checkbox rather
+   * than an automatic rule: a small file that IS worth re-encoding (a 120KB PNG that would
+   * halve as WebP) stays the user's call.
+   */
+  const setNoCompression = useCallback(
+    (jobId: string, noCompression: boolean) => {
+      const entry = stagedRef.current.find((file) => file.jobId === jobId);
+      if (!entry) return;
+      patchStaged(jobId, { noCompression });
+      void runCompression(jobId, entry.file, {
+        highFidelity: entry.highFidelity,
+        noCompression,
+      });
     },
     [patchStaged, runCompression],
   );
@@ -199,8 +241,13 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
         patchStaged(file.jobId, { status: 'uploading' });
         // Every rung lands in R2 BEFORE the metadata row is written, so an abandoned
         // upload orphans bytes rather than pointing the manifest at a missing image.
+        const passthrough = file.noCompression;
         await Promise.all(
-          file.variants.map((variant) => api.uploadVariant(id, variant.rung, variant.blob)),
+          file.variants.map((variant) =>
+            passthrough
+              ? api.uploadOriginal(id, file.format, variant.blob)
+              : api.uploadVariant(id, variant.rung, variant.blob),
+          ),
         );
         const item: ImageItem = {
           id,
@@ -209,7 +256,10 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           alt: file.alt,
           // The largest rung the encoder actually produced. A source smaller than the top
           // of the ladder stops part way up, and srcset must not claim otherwise.
-          maxRung: Math.max(...file.variants.map((variant) => variant.rung)),
+          // Meaningless for a passthrough — there is one object and no ladder.
+          maxRung: passthrough ? 400 : Math.max(...file.variants.map((variant) => variant.rung)),
+          passthrough,
+          format: file.format,
         };
         await api.createImage(item);
         patchStaged(file.jobId, { status: 'done' });
@@ -425,6 +475,7 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           publishing={publishing}
           onChange={patchStaged}
           onHighFidelity={setHighFidelity}
+          onNoCompression={setNoCompression}
           onMove={moveStaged}
           onReorder={reorderStaged}
           onRemove={(jobId) => {

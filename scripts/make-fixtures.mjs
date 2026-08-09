@@ -131,6 +131,8 @@ async function main() {
       alt: `Fixture ${s.index}, ${s.label}`,
       // Fixtures are rendered at every rung, so the whole ladder exists.
       maxRung: RUNGS[RUNGS.length - 1],
+      passthrough: false,
+      format: 'webp',
     })),
     settings: { name: 'Fixture Gallery', contact: 'hello@example.com' },
   };

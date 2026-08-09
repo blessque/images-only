@@ -433,3 +433,9 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
+
+/* Passthrough rows report one number, not a before/after — nothing was re-encoded, so a
+   savings figure would be theatre. */
+.tray-untouched {
+  color: #7f93a8;
+}

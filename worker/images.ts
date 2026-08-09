@@ -8,6 +8,8 @@ interface ImageRow {
   size_class: string;
   alt: string;
   max_rung: number;
+  passthrough: number;
+  format: string;
   sort_order: number;
 }
 
@@ -18,6 +20,8 @@ function toItem(row: ImageRow): ImageItem {
     sizeClass: row.size_class as SizeClass,
     alt: row.alt,
     maxRung: row.max_rung,
+    passthrough: row.passthrough === 1,
+    format: row.format,
   };
 }
 
@@ -25,7 +29,7 @@ export async function readManifest(db: D1Database): Promise<Manifest> {
   const [images, settings] = await Promise.all([
     db
       .prepare(
-        `SELECT id, aspect, size_class, alt, max_rung, sort_order FROM images
+        `SELECT id, aspect, size_class, alt, max_rung, passthrough, format, sort_order FROM images
          WHERE deleted_at IS NULL ORDER BY sort_order ASC`,
       )
       .all<ImageRow>(),
@@ -57,10 +61,20 @@ export async function insertImage(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO images (id, aspect, size_class, alt, max_rung, sort_order, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO images (id, aspect, size_class, alt, max_rung, passthrough, format, sort_order, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(item.id, item.aspect, item.sizeClass, item.alt, item.maxRung, sortOrder, now)
+    .bind(
+      item.id,
+      item.aspect,
+      item.sizeClass,
+      item.alt,
+      item.maxRung,
+      item.passthrough ? 1 : 0,
+      item.format,
+      sortOrder,
+      now,
+    )
     .run();
 }
 

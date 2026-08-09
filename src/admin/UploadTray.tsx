@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SIZE_CLASSES, type SizeClass } from '@/lib/types';
-import { formatBytes, type StagedFile } from './staging';
+import { canPassThrough, formatBytes, type StagedFile } from './staging';
 
 interface UploadTrayProps {
   staged: StagedFile[];
@@ -8,6 +8,8 @@ interface UploadTrayProps {
   onChange: (jobId: string, patch: Partial<StagedFile>) => void;
   /** Re-encodes that one file — the checkbox appears after the first pass has already run. */
   onHighFidelity: (jobId: string, value: boolean) => void;
+  /** Small files only: upload the source bytes untouched, or run the ladder anyway. */
+  onNoCompression: (jobId: string, value: boolean) => void;
   /** The tray's order becomes the gallery's order, so arranging here saves shuffling later. */
   onMove: (jobId: string, direction: -1 | 1) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -26,6 +28,7 @@ export function UploadTray({
   publishing,
   onChange,
   onHighFidelity,
+  onNoCompression,
   onMove,
   onReorder,
   onRemove,
@@ -154,19 +157,39 @@ export function UploadTray({
                 </div>
 
                 {/*
-                  The escape hatch, per image — never a global toggle. A non-technical user
-                  offered a global "skip compression" switch turns it off "to be safe" and
-                  ships a 200MB page. See docs/decisions/TUNING_LOG.md.
+                  One checkbox, two meanings — and both are "compress this less", so the
+                  direction stays consistent. It is per image and reversible; a GLOBAL
+                  skip-compression switch stays rejected, because a non-technical user
+                  turns that off "to be safe" and ships a 200MB page.
+                  See docs/decisions/TUNING_LOG.md.
                 */}
-                <label className="tray-fidelity" title="Re-encodes this image at a larger byte budget">
-                  <input
-                    type="checkbox"
-                    checked={file.highFidelity}
-                    onChange={(event) => onHighFidelity(file.jobId, event.target.checked)}
-                    disabled={publishing || file.status === 'compressing'}
-                  />
-                  High fidelity
-                </label>
+                {canPassThrough(file.file) ? (
+                  <label
+                    className="tray-fidelity"
+                    title="Uploads the original bytes untouched — nothing is re-encoded"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={file.noCompression}
+                      onChange={(event) => onNoCompression(file.jobId, event.target.checked)}
+                      disabled={publishing || file.status === 'compressing'}
+                    />
+                    No compression
+                  </label>
+                ) : (
+                  <label
+                    className="tray-fidelity"
+                    title="Re-encodes this image at a higher quality and a larger byte budget"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={file.highFidelity}
+                      onChange={(event) => onHighFidelity(file.jobId, event.target.checked)}
+                      disabled={publishing || file.status === 'compressing'}
+                    />
+                    High fidelity
+                  </label>
+                )}
               </div>
             </div>
 
@@ -174,11 +197,20 @@ export function UploadTray({
             <div className="tray-size">
               {file.status === 'compressing' ? (
                 <span className="tray-progress">
-                  {file.highFidelity ? 're-encoding ' : ''}
-                  {file.rung ? `${file.rung}px…` : 'reading…'}
+                  {file.noCompression
+                    ? 'reading…'
+                    : `${file.highFidelity ? 're-encoding ' : ''}${
+                        file.rung ? `${file.rung}px…` : 'reading…'
+                      }`}
                 </span>
               ) : file.status === 'error' ? (
                 <span className="tray-error">{file.error}</span>
+              ) : file.noCompression && file.compressedBytes > 0 ? (
+                // Nothing was re-encoded, so a before/after would be theatre.
+                <>
+                  <span className="tray-after">{formatBytes(file.sourceBytes)}</span>
+                  <span className="tray-untouched">untouched</span>
+                </>
               ) : file.compressedBytes > 0 ? (
                 <>
                   <span className="tray-before">{formatBytes(file.sourceBytes)}</span>

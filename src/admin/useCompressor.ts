@@ -6,6 +6,8 @@ export interface CompressOutcome {
   sourceBytes: number;
   variants: VariantResult[];
   colorSpace: string;
+  passthrough: boolean;
+  format: string;
 }
 
 type Pending = {
@@ -47,6 +49,8 @@ export function useCompressor() {
           sourceBytes: message.sourceBytes,
           variants: message.variants,
           colorSpace: message.colorSpace,
+          passthrough: message.passthrough,
+          format: message.format,
         });
       } else {
         pending.reject(new Error(message.message));
@@ -71,7 +75,7 @@ export function useCompressor() {
   return function compress(
     jobId: string,
     file: File,
-    highFidelity: boolean,
+    options: { mode: 'ladder' | 'passthrough'; highFidelity: boolean; format: string },
     onProgress: (rung: number) => void,
   ): Promise<CompressOutcome> {
     const worker = workerRef.current;
@@ -79,7 +83,7 @@ export function useCompressor() {
 
     return new Promise<CompressOutcome>((resolve, reject) => {
       pendingRef.current.set(jobId, { resolve, reject, onProgress });
-      worker.postMessage({ jobId, file, highFidelity } satisfies CompressRequest);
+      worker.postMessage({ jobId, file, ...options } satisfies CompressRequest);
     });
   };
 }

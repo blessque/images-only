@@ -25,6 +25,20 @@ const VALID_CLASSES = new Set<string>(['solo', 'wide', 'medium']);
 const VALID_RUNGS = new Set<number>(VARIANT_WIDTHS);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
+/**
+ * Formats a passthrough object may be stored as, and the content type each is served with.
+ *
+ * A passthrough is the SOURCE bytes, so it is whatever the designer dropped in — serving a
+ * JPEG under `image/webp` would be a lie the browser mostly tolerates and some tools do not.
+ */
+const PASSTHROUGH_TYPES: Record<string, string> = {
+  webp: 'image/webp',
+  jpg: 'image/jpeg',
+  png: 'image/png',
+  avif: 'image/avif',
+  gif: 'image/gif',
+};
+
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -87,21 +101,36 @@ async function serveShell(request: Request, env: Env): Promise<Response> {
   });
 }
 
-async function serveImage(url: URL, env: Env): Promise<Response> {
-  const match = /^\/img\/([a-f0-9]{16})\/(\d+)\.webp$/.exec(url.pathname);
-  if (!match) return new Response('Not found', { status: 404 });
-
-  const [, id, rung] = match;
-  if (!id || !rung || !VALID_RUNGS.has(Number(rung))) {
-    return new Response('Not found', { status: 404 });
+/** Resolves an image path to its R2 key and content type, or null if it is not one. */
+function resolveImagePath(pathname: string): { key: string; contentType: string } | null {
+  const ladder = /^\/img\/([a-f0-9]{16})\/(\d+)\.webp$/.exec(pathname);
+  if (ladder) {
+    const [, id, rung] = ladder;
+    if (!id || !rung || !VALID_RUNGS.has(Number(rung))) return null;
+    return { key: `${id}/${rung}.webp`, contentType: 'image/webp' };
   }
 
-  const object = await env.BUCKET.get(`${id}/${rung}.webp`);
+  const full = /^\/img\/([a-f0-9]{16})\/full\.([a-z0-9]+)$/.exec(pathname);
+  if (full) {
+    const [, id, format] = full;
+    const contentType = format ? PASSTHROUGH_TYPES[format] : undefined;
+    if (!id || !format || !contentType) return null;
+    return { key: `${id}/full.${format}`, contentType };
+  }
+
+  return null;
+}
+
+async function serveImage(url: URL, env: Env): Promise<Response> {
+  const resolved = resolveImagePath(url.pathname);
+  if (!resolved) return new Response('Not found', { status: 404 });
+
+  const object = await env.BUCKET.get(resolved.key);
   if (!object) return new Response('Not found', { status: 404 });
 
   return new Response(object.body, {
     headers: {
-      'content-type': 'image/webp',
+      'content-type': resolved.contentType,
       // Safe ONLY because keys are immutable — "replace" mints a new id and never
       // overwrites. An overwritten object behind this header is a stale image that no
       // purge can reach. See docs/architecture/IMAGE_PIPELINE.md.
@@ -141,18 +170,17 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
 async function handleUpload(request: Request, env: Env, url: URL): Promise<Response> {
   if (!(await requireAuth(request, env))) return json({ error: 'Unauthorized' }, 401);
 
-  const match = /^\/api\/upload\/([a-f0-9]{16})\/(\d+)\.webp$/.exec(url.pathname);
-  const [, id, rung] = match ?? [];
-  if (!id || !rung || !VALID_RUNGS.has(Number(rung))) {
-    return json({ error: 'Bad variant' }, 400);
-  }
+  // The upload path mirrors the serve path exactly, so a variant can only be written
+  // under a key that is subsequently readable.
+  const resolved = resolveImagePath(url.pathname.replace('/api/upload/', '/img/'));
+  if (!resolved) return json({ error: 'Bad variant' }, 400);
 
   const length = Number(request.headers.get('content-length') ?? '0');
   if (length > MAX_UPLOAD_BYTES) return json({ error: 'Too large' }, 413);
   if (!request.body) return json({ error: 'Empty body' }, 400);
 
-  await env.BUCKET.put(`${id}/${rung}.webp`, request.body, {
-    httpMetadata: { contentType: 'image/webp', cacheControl: IMMUTABLE },
+  await env.BUCKET.put(resolved.key, request.body, {
+    httpMetadata: { contentType: resolved.contentType, cacheControl: IMMUTABLE },
   });
   return json({ ok: true });
 }
@@ -166,6 +194,8 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
     sizeClass?: unknown;
     alt?: unknown;
     maxRung?: unknown;
+    passthrough?: unknown;
+    format?: unknown;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -181,16 +211,26 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
       : null;
   // Must be a rung we actually serve — an arbitrary number here would make srcset
   // advertise a key that was never written.
+  const passthrough = body.passthrough === true;
+  const format = typeof body.format === 'string' ? body.format : 'webp';
+  // A passthrough may be any format we can serve; a ladder image is always webp.
+  const formatOk = passthrough ? format in PASSTHROUGH_TYPES : format === 'webp';
+  // maxRung is meaningless for a passthrough (there is no ladder), so it is not required.
   const maxRung =
     typeof body.maxRung === 'number' && VALID_RUNGS.has(body.maxRung) ? body.maxRung : null;
-  if (!id || !aspect || !sizeClass || !maxRung) return json({ error: 'Invalid image' }, 400);
+
+  if (!id || !aspect || !sizeClass || !formatOk || (!passthrough && !maxRung)) {
+    return json({ error: 'Invalid image' }, 400);
+  }
 
   const item: ImageItem = {
     id,
     aspect,
     sizeClass,
     alt: typeof body.alt === 'string' ? body.alt.slice(0, 500) : '',
-    maxRung,
+    maxRung: maxRung ?? (VARIANT_WIDTHS[0] ?? 400),
+    passthrough,
+    format,
   };
 
   // Metadata is written LAST, after every rung has landed in R2 — so an abandoned upload

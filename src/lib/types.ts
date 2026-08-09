@@ -29,8 +29,16 @@ export interface ImageItem {
   /**
    * Largest rung present in R2. The encoder never upscales, so a small source stops part
    * way up the ladder; advertising a rung that does not exist 404s the tile.
+   * Meaningless when `passthrough` is true — there is no ladder.
    */
   maxRung: number;
+  /**
+   * The source was uploaded UNTOUCHED — one object, no ladder, no re-encode. Chosen for
+   * files small enough that compressing them costs quality and buys nothing.
+   */
+  passthrough: boolean;
+  /** Extension the bytes are stored under: 'webp' for the ladder, the source's own otherwise. */
+  format: string;
 }
 
 export interface Settings {

@@ -18,8 +18,16 @@ const A = {
 let seq = 0;
 function img(aspect: number, sizeClass: SizeClass = 'medium'): ImageItem {
   seq += 1;
-  // maxRung is irrelevant to layout — the solver only ever reads aspect and sizeClass.
-  return { id: `i${seq}`, aspect, sizeClass, alt: '', maxRung: 2400 };
+  // Only aspect and sizeClass matter to the solver; the rest is delivery metadata.
+  return {
+    id: `i${seq}`,
+    aspect,
+    sizeClass,
+    alt: '',
+    maxRung: 2400,
+    passthrough: false,
+    format: 'webp',
+  };
 }
 
 function params(over: Partial<SolveParams> = {}): SolveParams {

@@ -3,7 +3,16 @@ import { availableRungs, fallbackSrc, srcSetFor, variantPixelWidth } from './ima
 import { VARIANT_WIDTHS, type ImageItem } from './types';
 
 function item(over: Partial<ImageItem> = {}): ImageItem {
-  return { id: 'a1b2c3d4e5f60718', aspect: 1.5, sizeClass: 'medium', alt: '', maxRung: 2400, ...over };
+  return {
+    id: 'a1b2c3d4e5f60718',
+    aspect: 1.5,
+    sizeClass: 'medium',
+    alt: '',
+    maxRung: 2400,
+    passthrough: false,
+    format: 'webp',
+    ...over,
+  };
 }
 
 /**
@@ -40,6 +49,21 @@ describe('srcset never advertises a variant that was not written', () => {
   it('clamps the fallback src to a rung that exists', () => {
     expect(fallbackSrc('/img', item({ maxRung: 400 }))).toContain('/400.webp');
     expect(fallbackSrc('/img', item({ maxRung: 2400 }))).toContain('/800.webp');
+  });
+});
+
+describe('passthrough images bypass the ladder entirely', () => {
+  it('offers NO srcset — there is one object, so src alone is the whole story', () => {
+    expect(srcSetFor('/img', item({ passthrough: true, format: 'webp' }))).toBeNull();
+  });
+
+  it('points src at the untouched original, under its own extension', () => {
+    expect(fallbackSrc('/img', item({ passthrough: true, format: 'png' }))).toBe(
+      '/img/a1b2c3d4e5f60718/full.png',
+    );
+    expect(fallbackSrc('/img', item({ passthrough: true, format: 'jpg' }))).toBe(
+      '/img/a1b2c3d4e5f60718/full.jpg',
+    );
   });
 });
 

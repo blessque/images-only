@@ -410,6 +410,51 @@ bug, but it cost a confusing red run — `npm run login:reset` now sits between 
 
 ---
 
+## Decisions made — 2026-08-09 (iteration 10: passthrough for small files)
+
+### Under 150KB, upload the source bytes UNTOUCHED
+The user's point: there is no sense re-encoding a 52KB WebP. Correct — and the canvas API
+has **no lossless WebP mode** (`quality: 1` is still lossy), so any re-encode is a strict
+loss. Passthrough is the only way to lose nothing.
+
+Stored once at `{id}/full.{format}` under its own extension, served with its true content
+type; `passthrough` and `format` ride on the manifest row. The client emits **no srcset** —
+one object means `src` alone is the whole story, and a one-entry srcset only creates a place
+for a wrong `sizes` to matter.
+
+Two honest caveats, recorded rather than hidden: the threshold is **bytes, not pixels** (a
+flat 4000px PNG can sit under it and will be served full-size — transfer cost, which is what
+the threshold measures, is unaffected), and **EXIF survives** a passthrough where the ladder
+strips GPS and camera serials for free.
+
+### It is a pre-checked CHECKBOX, not an automatic rule
+Unchecking runs the ladder. That matters because a small file can still be worth
+re-encoding — a 120KB PNG that would halve as WebP — and that stays the user's call. This is
+**not** the global "skip compression" switch that was rejected in iteration 1: it is per
+image, reversible, and its default is already right for the file in front of it.
+
+### One checkbox, two meanings, and that is fine
+Under the threshold it reads "No compression" (checked); above it, "High fidelity"
+(unchecked). Both mean *compress this less*, so the direction is consistent and the row
+never shows two competing controls.
+
+### A passthrough row shows one number, not a before/after
+Nothing was re-encoded, so a "−0%" saving would be theatre. It reports its size and the word
+"untouched".
+
+### The image-pipeline dials finally live in one params file
+`src/admin/compressParams.ts`. CLAUDE.md has mandated this since iteration 1 and the
+compression numbers had been sitting inline in the worker the whole time.
+
+### FOURTH time a red test was the TEST's fault
+The shrinkage assertion swept up the passthrough row, whose empty saving parses as `NaN`.
+Asserting shrinkage over a file the feature exists to *not* shrink is asserting against the
+feature. Now scoped to compressed rows. The running tally — `minRowHeight`, ">50% always",
+the positional colour sample, and this — is the argument for reading a red test as a
+question before touching the code.
+
+---
+
 ## Open issues
 
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `medium` fraction (1/4) are still taste

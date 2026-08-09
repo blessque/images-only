@@ -5,21 +5,32 @@
  *
  * Runs in a Web Worker because decoding twenty 10MB photographs on the main thread freezes
  * the page, and the progress bars would be lies. See docs/architecture/IMAGE_PIPELINE.md.
+ *
+ * Every tunable number lives in `compressParams.ts`.
  */
 
 import { VARIANT_WIDTHS } from '@/lib/types';
+import { QUALITY_FLOOR, QUALITY_STEP, budgetFor, startingQuality } from './compressParams';
 
 export interface CompressRequest {
   jobId: string;
   file: File;
   /**
-   * Raises this image's starting QUALITY and its byte budget — the escape hatch for fine
-   * grain or subtle gradients. Per image, reversible, never a global switch.
+   * `passthrough` uploads the source bytes UNTOUCHED — no ladder, no re-encode. Chosen for
+   * small files, where re-encoding costs quality and buys nothing.
+   */
+  mode: 'ladder' | 'passthrough';
+  /**
+   * Ladder mode only. Raises this image's starting QUALITY and its byte budget — the
+   * escape hatch for fine grain or subtle gradients. Per image, reversible, never global.
    */
   highFidelity: boolean;
+  /** Passthrough mode only: the extension the original bytes are stored under. */
+  format: string;
 }
 
 export interface VariantResult {
+  /** Ladder rung, or 0 for the single passthrough original. */
   rung: number;
   blob: Blob;
   width: number;
@@ -35,31 +46,10 @@ export type CompressResponse =
       sourceBytes: number;
       variants: VariantResult[];
       colorSpace: string;
+      passthrough: boolean;
+      format: string;
     }
   | { type: 'error'; jobId: string; message: string };
-
-/** Byte budget per rung. The top rung is the de-facto master, so it gets more room. */
-function budgetFor(rung: number, highFidelity: boolean): number {
-  const base = rung <= 400 ? 60_000 : rung <= 800 ? 180_000 : rung <= 1600 ? 500_000 : 900_000;
-  return highFidelity ? base * 2 : base;
-}
-
-/**
- * Rung 3 is encoded HIGHER than the rest, deliberately: originals are not stored, so it is
- * the master any future re-encode would have to start from. Bought insurance — do not
- * normalise it. See IMAGE_PIPELINE.md.
- *
- * High fidelity raises the STARTING quality, not only the budget. Raising the budget alone
- * was tried and is a no-op for most photographs: the search only steps quality DOWN when a
- * file is over budget, so an image that already fit came out byte-identical and the
- * checkbox visibly did nothing. The point of the escape hatch is "this one suffered, give
- * it more" — that has to mean more quality.
- */
-function startingQuality(rung: number, highFidelity: boolean): number {
-  const isTopRung = rung === VARIANT_WIDTHS[VARIANT_WIDTHS.length - 1];
-  if (highFidelity) return isTopRung ? 0.97 : 0.95;
-  return isTopRung ? 0.92 : 0.86;
-}
 
 function fit(width: number, height: number, longEdge: number) {
   const scale = Math.min(1, longEdge / Math.max(width, height));
@@ -126,10 +116,8 @@ async function encodeWithinBudget(
   let quality = startingQuality(rung, highFidelity);
   let blob = await canvas.convertToBlob({ type: 'image/webp', quality });
 
-  // Floor at 0.62: below that WebP starts producing visible blocking, and shipping a
-  // visibly damaged photograph to hit a byte target is the wrong trade on this site.
-  while (blob.size > budget && quality > 0.62) {
-    quality = Math.max(0.62, quality - 0.06);
+  while (blob.size > budget && quality > QUALITY_FLOOR) {
+    quality = Math.max(QUALITY_FLOOR, quality - QUALITY_STEP);
     blob = await canvas.convertToBlob({ type: 'image/webp', quality });
   }
   return blob;
@@ -161,7 +149,36 @@ function pickColorSpace(): PredefinedColorSpace {
   }
 }
 
-async function compress(request: CompressRequest): Promise<CompressResponse> {
+/**
+ * Passthrough — the source bytes, untouched.
+ *
+ * The image is still decoded, but ONLY to read its dimensions, which the grid needs to
+ * reserve the tile before anything loads. Nothing is drawn and nothing is re-encoded, so
+ * not one pixel changes and the ICC profile and EXIF survive intact. (That last point cuts
+ * both ways: the EXIF stripping the ladder gives away for free — GPS, camera serial — does
+ * not happen here. Worth knowing before passing a camera original through.)
+ */
+async function passthrough(request: CompressRequest): Promise<CompressResponse> {
+  const { jobId, file, format } = request;
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = bitmap;
+  bitmap.close();
+
+  self.postMessage({ type: 'progress', jobId, rung: 0 } satisfies CompressResponse);
+
+  return {
+    type: 'done',
+    jobId,
+    aspect: width / height,
+    sourceBytes: file.size,
+    variants: [{ rung: 0, blob: file, width, height }],
+    colorSpace: 'source',
+    passthrough: true,
+    format,
+  };
+}
+
+async function ladder(request: CompressRequest): Promise<CompressResponse> {
   const { jobId, file, highFidelity } = request;
   const colorSpace = pickColorSpace();
 
@@ -192,13 +209,17 @@ async function compress(request: CompressRequest): Promise<CompressResponse> {
     sourceBytes: file.size,
     variants,
     colorSpace,
+    passthrough: false,
+    format: 'webp',
   };
 }
 
 self.onmessage = async (event: MessageEvent<CompressRequest>) => {
   const request = event.data;
   try {
-    self.postMessage(await compress(request));
+    self.postMessage(
+      request.mode === 'passthrough' ? await passthrough(request) : await ladder(request),
+    );
   } catch (cause) {
     self.postMessage({
       type: 'error',

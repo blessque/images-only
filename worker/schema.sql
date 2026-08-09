@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS images (
   -- browser picks it, 404s, and the tile falls through to the broken-image mark.
   -- Emitted rungs are always a prefix of the ladder, so one number describes the set.
   max_rung     INTEGER NOT NULL DEFAULT 2400,
+  -- 1 when the source was uploaded untouched: one object at {id}/full.{format}, no
+  -- ladder, no re-encode. Chosen for files small enough that compressing them costs
+  -- quality and buys nothing.
+  passthrough  INTEGER NOT NULL DEFAULT 0,
+  -- Extension the bytes are stored under. 'webp' for the ladder; the source's own format
+  -- for a passthrough, because those bytes are never converted.
+  format       TEXT    NOT NULL DEFAULT 'webp',
   sort_order   INTEGER NOT NULL,
   created_at   INTEGER NOT NULL,
   -- Soft delete: a non-technical user must not lose work to a misclick. Purged after 30
