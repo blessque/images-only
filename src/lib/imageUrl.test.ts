@@ -6,7 +6,7 @@ function item(over: Partial<ImageItem> = {}): ImageItem {
   return {
     id: 'a1b2c3d4e5f60718',
     aspect: 1.5,
-    sizeClass: 'medium',
+    sizeClass: 'tight',
     alt: '',
     maxRung: 2400,
     passthrough: false,

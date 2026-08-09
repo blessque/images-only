@@ -4,8 +4,8 @@
  */
 
 /**
- * SOLO takes a whole row on its own, at any aspect ratio. WIDE and MEDIUM share rows and
- * differ only in how much of one they ask for.
+ * SOLO takes a whole row on its own, at any aspect ratio. WIDE and TIGHT share rows and
+ * differ only in how much of one they ask for — `tight` packs more per row.
  *
  * This replaced big/medium/small, which promised a SIZE the grid could not deliver: within
  * a row every image shares a height, so widths are locked to aspect ratios — a "big"
@@ -13,9 +13,9 @@
  * honest way to make something prominent, and it is named for what it actually does.
  * See docs/decisions/TUNING_LOG.md.
  */
-export type SizeClass = 'solo' | 'wide' | 'medium';
+export type SizeClass = 'solo' | 'wide' | 'tight';
 
-export const SIZE_CLASSES: readonly SizeClass[] = ['solo', 'wide', 'medium'];
+export const SIZE_CLASSES: readonly SizeClass[] = ['solo', 'wide', 'tight'];
 
 export interface ImageItem {
   id: string;

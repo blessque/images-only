@@ -49,9 +49,9 @@ from being **alone**, and that is what `solo` is for.
 |---|---|
 | **solo** | A whole row to itself, at any aspect ratio. **Exempt from the height clamp.** |
 | **wide** | Shares a row; asks for about half of one. |
-| **medium** | Shares a row; asks for about a third, tightening to a quarter on wide screens. |
+| **tight** | Shares a row; asks for about a third, tightening to a quarter on wide screens. |
 
-| Breakpoint | solo | wide | medium |
+| Breakpoint | solo | wide | tight |
 |---|---|---|---|
 | ≤ 640 (mobile) | 1/1 | 1/1 | 1/1 |
 | 641 – 1024 | 1/1 | 1/1 | 1/2 |
@@ -142,7 +142,7 @@ bug** — the entire look is meant to be tuned by editing one file.
 | `MIN_ROW_HEIGHT` | floor before pushing one out | guards over-dense rows on wide screens |
 | `LAST_ROW_WARN_FACTOR` | admin warning threshold | ~1.5; UI-only, never changes layout |
 
-`MAX_ROW_HEIGHT` and the wide-screen `medium` fraction are the two taste dials. Tune by
+`MAX_ROW_HEIGHT` and the wide-screen `tight` fraction are the two taste dials. Tune by
 eye, record the verdict in `docs/decisions/TUNING_LOG.md`.
 
 ---

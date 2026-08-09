@@ -455,9 +455,28 @@ question before touching the code.
 
 ---
 
+## Decisions made — 2026-08-09 (iteration 11: full class names, no index badge)
+
+### `medium` renamed to `tight`, in the code and the database — not just the button
+"Medium" implied a size the class never controlled; "tight" says what it does — pack more
+per row. Renaming only the label would have left the UI disagreeing with the data, which is
+precisely the confusion `big` caused. Migration 0003 rebuilds the table (CHECK constraint
+again). Unlike 0001 this one IS idempotent in shape, since `tight` does not match `medium`.
+
+### The per-tile bar spells the classes out
+`S W M` → `solo wide tight`. Three initials on a hover bar are a private code the user has
+to memorise; the words cost about 60px and nothing else.
+
+### The position number is gone
+It sat at the end of the bar showing `2`, `3`, … The grid already shows you where an image
+is, and the number could not be acted on — the arrows move things, not the digit. `index`
+and `total` still reach the component, but only to disable the arrows at the two ends.
+
+---
+
 ## Open issues
 
-- **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `medium` fraction (1/4) are still taste
+- **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `tight` fraction (1/4) are still taste
   dials** tuned against synthetic fixtures. `solo` is now exempt from the clamp, so the
   clamp only governs shared rows — its value matters less than it did. Record any verdict here.
 - **A soft-deleted image has no UI to restore it once the undo toast has gone.** The row

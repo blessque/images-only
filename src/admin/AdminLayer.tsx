@@ -132,7 +132,7 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
         status: 'queued',
         rung: null,
         aspect: 1,
-        sizeClass: 'medium',
+        sizeClass: 'tight',
         alt: altFromFilename(file.name),
         highFidelity: false,
         // Pre-checked for anything already small enough that re-encoding it would only

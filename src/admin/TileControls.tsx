@@ -14,6 +14,9 @@ interface TileControlsProps {
 /**
  * Per-image controls, drawn over the tile in admin mode.
  *
+ * `index`/`total` are used ONLY to disable the arrows at the ends — the position number
+ * itself was removed as noise: the grid already shows you where the image is.
+ *
  * Arrows are BOTH clickable icons and keyboard keys, per the brief. They are the primary
  * reorder mechanism because a justified grid re-solves under a dragged item — the drop
  * target moves while you are dragging toward it — so drag-to-reorder needs an insertion
@@ -61,9 +64,8 @@ export function TileControls({
               type="button"
               className={item.sizeClass === sizeClass ? 'tc-btn is-active' : 'tc-btn'}
               onClick={() => onSizeClass(item.id, sizeClass)}
-              title={`Size: ${sizeClass}`}
             >
-              {sizeClass.charAt(0).toUpperCase()}
+              {sizeClass}
             </button>
           ))}
         </div>
@@ -88,7 +90,6 @@ export function TileControls({
           ×
         </button>
 
-        <span className="tc-index">{index + 1}</span>
       </div>
 
       {editingAlt ? (

@@ -18,7 +18,7 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const PASSWORD = 'test-password-1234';
 const RUNGS = [400, 800, 1600, 2400];
 const TARGET = 200;
-const CLASSES = ['solo', 'wide', 'medium', 'wide', 'medium', 'medium'];
+const CLASSES = ['solo', 'wide', 'tight', 'wide', 'tight', 'tight'];
 
 async function waitForServer() {
   for (let attempt = 0; attempt < 200; attempt++) {

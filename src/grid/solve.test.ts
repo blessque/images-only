@@ -16,7 +16,7 @@ const A = {
 } as const;
 
 let seq = 0;
-function img(aspect: number, sizeClass: SizeClass = 'medium'): ImageItem {
+function img(aspect: number, sizeClass: SizeClass = 'tight'): ImageItem {
   seq += 1;
   // Only aspect and sizeClass matter to the solver; the rest is delivery metadata.
   return {
@@ -119,7 +119,7 @@ describe('solve — core invariants', () => {
       img(
         [A.panorama, A.wide, A.landscape, A.classic, A.square, A.portrait, A.tall, A.phone][n % 8] ??
           A.square,
-        (['solo', 'wide', 'medium', 'wide'] as const)[n % 4] ?? 'medium',
+        (['solo', 'wide', 'tight', 'wide'] as const)[n % 4] ?? 'tight',
       ),
     );
 
@@ -136,7 +136,7 @@ describe('solve — core invariants', () => {
 
 describe('solve — size class controls density', () => {
   it('gives a solo image a row to itself on desktop', () => {
-    const items = [img(A.landscape, 'solo'), img(A.landscape, 'medium'), img(A.landscape, 'medium')];
+    const items = [img(A.landscape, 'solo'), img(A.landscape, 'tight'), img(A.landscape, 'tight')];
     const rows = solve(items, 1440, params({ fractions: fractionsFor(1440) }));
 
     expect(rows[0]?.images).toHaveLength(1);
@@ -148,7 +148,7 @@ describe('solve — size class controls density', () => {
     // The bug that produced this class: a near-square image alone at 1440 solves to
     // ~1440px, the clamp recruited a neighbour, and then equal heights made the
     // "prominent" image render NARROWER than the wide photo beside it.
-    const items = [img(A.tall, 'solo'), img(A.panorama, 'medium')];
+    const items = [img(A.tall, 'solo'), img(A.panorama, 'tight')];
     const rows = solve(items, 1440, params({ maxRowHeight: 900 }));
 
     expect(rows[0]?.images).toHaveLength(1);
@@ -157,7 +157,7 @@ describe('solve — size class controls density', () => {
   });
 
   it('never conscripts a solo image to fix another row’s height', () => {
-    const items = [img(A.phone, 'medium'), img(A.landscape, 'solo'), img(A.landscape, 'medium')];
+    const items = [img(A.phone, 'tight'), img(A.landscape, 'solo'), img(A.landscape, 'tight')];
     const rows = solve(items, 1440, params({ maxRowHeight: 900 }));
 
     // Row 0 is too tall and would love a neighbour, but the next image is solo.
@@ -176,8 +176,8 @@ describe('solve — size class controls density', () => {
 
   it('puts exactly one image per row on mobile, whatever the class', () => {
     const items = [
-      img(A.landscape, 'solo'), img(A.tall, 'medium'),
-      img(A.square, 'medium'), img(A.wide, 'wide'),
+      img(A.landscape, 'solo'), img(A.tall, 'tight'),
+      img(A.square, 'tight'), img(A.wide, 'wide'),
     ];
     const p = params({ fractions: fractionsFor(390), maxRowHeight: 10_000 });
     const rows = solve(items, 390, p);
@@ -201,7 +201,7 @@ describe('solve — the height clamp works by membership, not by cropping', () =
   });
 
   it('pushes an image out of a row that would be too short', () => {
-    const items = Array.from({ length: 12 }, () => img(A.panorama, 'medium'));
+    const items = Array.from({ length: 12 }, () => img(A.panorama, 'tight'));
     const p = params({ minRowHeight: 200, maxRowHeight: 1120 });
     const rows = solve(items, 1440, p);
 

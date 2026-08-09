@@ -24,13 +24,13 @@ export interface Breakpoint {
 export const BREAKPOINTS: readonly Breakpoint[] = [
   // Mobile is NOT a separate code path — it is this row collapsing everything to 1/1,
   // which produces the one-image-per-row feel the brief asked for.
-  { minWidth: 0, fractions: { solo: 1, wide: 1, medium: 1 } },
-  { minWidth: 641, fractions: { solo: 1, wide: 1, medium: 1 / 2 } },
-  { minWidth: 1025, fractions: { solo: 1, wide: 1 / 2, medium: 1 / 3 } },
+  { minWidth: 0, fractions: { solo: 1, wide: 1, tight: 1 } },
+  { minWidth: 641, fractions: { solo: 1, wide: 1, tight: 1 / 2 } },
+  { minWidth: 1025, fractions: { solo: 1, wide: 1 / 2, tight: 1 / 3 } },
   // Past ~1800px images stop needing to grow and the gallery benefits from density, so
-  // `medium` tightens. `wide` stays at a half — that is the "two large images per row"
+  // `tight` tightens further. `wide` stays at a half — that is the "two large images per row"
   // the brief asked for on a 2560 display.
-  { minWidth: 1801, fractions: { solo: 1, wide: 1 / 2, medium: 1 / 4 } },
+  { minWidth: 1801, fractions: { solo: 1, wide: 1 / 2, tight: 1 / 4 } },
 ];
 
 /**
@@ -63,7 +63,7 @@ export function fractionsFor(containerWidth: number): Record<SizeClass, number> 
     if (containerWidth >= bp.minWidth) chosen = bp;
   }
   // BREAKPOINTS is a non-empty literal, but noUncheckedIndexedAccess cannot know that.
-  return chosen ? chosen.fractions : { solo: 1, wide: 1, medium: 1 };
+  return chosen ? chosen.fractions : { solo: 1, wide: 1, tight: 1 };
 }
 
 export function maxRowHeightFor(viewportHeight: number): number {

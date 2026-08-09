@@ -146,14 +146,14 @@ async function main() {
     const created = await fetch(`${BASE}/api/images`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'medium', alt: xssAlt, maxRung: 400, passthrough: false, format: 'webp' }),
+      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'tight', alt: xssAlt, maxRung: 400, passthrough: false, format: 'webp' }),
     });
     check(created.status === 201, `creating the metadata row succeeds (${created.status})`);
 
     const duplicate = await fetch(`${BASE}/api/images`, {
       method: 'POST',
       headers: { ...auth, 'content-type': 'application/json' },
-      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'medium', alt: '', maxRung: 400, passthrough: false, format: 'webp' }),
+      body: JSON.stringify({ id, aspect: 1.5, sizeClass: 'tight', alt: '', maxRung: 400, passthrough: false, format: 'webp' }),
     });
     check(duplicate.status === 409, `a colliding id returns 409, not a 500 (${duplicate.status})`);
 
