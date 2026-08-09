@@ -43,3 +43,6 @@ memory/
 # Bundled Worker for the Node port — build output
 /node/build/
 /.data/
+
+# Shared-hosting bundle — build output
+/php-site/

@@ -33,7 +33,8 @@
     "verify:freeze": "node scripts/verify-freeze.mjs",
     "node:build": "esbuild worker/index.ts --bundle --platform=neutral --format=esm --outfile=node/build/worker.mjs --log-level=warning",
     "node:start": "npm run build && npm run node:build && node node/server.mjs",
-    "verify:node": "npm run node:build && node scripts/verify-node.mjs"
+    "verify:node": "npm run node:build && node scripts/verify-node.mjs",
+    "build:php": "node scripts/build-php.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

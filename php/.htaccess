@@ -1,0 +1,27 @@
+# Send everything that is not a real file to index.php.
+#
+# `assets/` and anything else on disk is served straight by Apache, which is what you want:
+# those are hashed and immutable. `/` and `/img/...` are not files, so they reach PHP.
+
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^ index.php [L]
+</IfModule>
+
+# The build's hashed assets never change under the same name, so cache them for a year.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|woff2)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# Your photographs are the originals. They are reachable through /img/ in resized form;
+# there is no reason to also serve the full-size folder directly.
+<IfModule mod_authz_core.c>
+  <FilesMatch "^\.">
+    Require all denied
+  </FilesMatch>
+</IfModule>
