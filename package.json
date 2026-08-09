@@ -30,7 +30,10 @@
     "import": "node scripts/import-images.mjs",
     "verify:setup": "node scripts/verify-setup.mjs",
     "freeze": "node scripts/freeze.mjs",
-    "verify:freeze": "node scripts/verify-freeze.mjs"
+    "verify:freeze": "node scripts/verify-freeze.mjs",
+    "node:build": "esbuild worker/index.ts --bundle --platform=neutral --format=esm --outfile=node/build/worker.mjs --log-level=warning",
+    "node:start": "npm run build && npm run node:build && node node/server.mjs",
+    "verify:node": "npm run node:build && node scripts/verify-node.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

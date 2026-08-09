@@ -80,16 +80,40 @@ broken-image mark; see `IMAGE_RETRY_DELAYS_MS`.
 Written down so it stays a short job rather than a rebuild, because the audience may end up
 being mostly in Russia, where Cloudflare has had reachability trouble.
 
-The Worker is a standards-based `fetch(request, env)` handler, so it runs on Node 18+, Deno
-or Bun behind roughly thirty lines of adapter. A move to a Russian VPS (Timeweb, Selectel,
-Beget — ~200–400₽/month, Russian cards) needs exactly three things:
+The Worker is a standards-based `fetch(request, env)` handler, so it runs on Node behind a
+thin adapter. **This is now built and tested rather than asserted** — see `node/` and
+`npm run verify:node`. It was a claim in this file for two iterations; a written escape
+route nobody has walked is a guess, and this one turned out to be true.
 
-1. a filesystem implementation of `worker/storage.ts` — two functions
-2. `better-sqlite3` in place of the D1 binding, behind the same query shapes in `images.ts`
-3. the HTTP adapter
+- `node/d1.mjs` — D1's query shapes on **Node's built-in SQLite**. Not `better-sqlite3`:
+  `node:sqlite` ships with Node 22.5+, so there is **no dependency and no native module to
+  compile**, which matters on a small VPS.
+- `node/bindings.mjs` — the filesystem implementation of `worker/storage.ts` (two
+  functions, as promised) and a static-file `ASSETS` fetcher.
+- `node/server.mjs` — the HTTP adapter, plus migrations applied on boot.
 
-**`src/` does not change at all**, and `npm run export` / `npm run import` carry the
-photographs across. That is the whole cost of the exit, and it is small on purpose.
+**Neither `src/` nor `worker/` changes at all**, and `npm run export` / `npm run import`
+carry the photographs across — verified byte-identical out of Workers KV and into the
+filesystem backend.
+
+**But read `node/README.md` before choosing it.** A VPS is not a simpler option than
+Cloudflare, it is a harder one: a server to patch, a certificate to renew, and a process
+that can die at 3am, all of which become somebody's job permanently. The reason to take it
+is **reachability** — if visitors cannot get to Cloudflare — and not cost, since the free
+tier is free and needs no card. Where nobody will be that somebody, the honest answer is
+`npm run freeze`.
+
+## Freezing it to plain files
+
+`npm run freeze` turns a live gallery into a folder any static host serves — the only
+pathway that needs no operator at all. It reads over HTTP and takes `/` exactly as the
+server renders it, manifest already inlined, so the frozen page cannot drift from the live
+one. `npm run verify:freeze` serves the result with `python3 -m http.server` and asserts the
+grid still renders uncropped at **CLS 0.00000**.
+
+Good targets: Yandex Object Storage (Russian payment, custom domain, free Let's Encrypt via
+Certificate Manager — the bucket must be named exactly as the domain), any S3, or a folder
+on any web host. The admin lock is inert there: a frozen copy has nothing listening.
 
 ## Client
 

@@ -39,3 +39,7 @@ memory/
 
 # Frozen static copies of the gallery — output, not source
 /freeze/
+
+# Bundled Worker for the Node port — build output
+/node/build/
+/.data/
