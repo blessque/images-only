@@ -20,8 +20,8 @@
     {
       "binding": "DB",
       "database_name": "justimages",
-      // Replace after: npx wrangler d1 create justimages
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Created 2026-08-09 in WEUR. Not a secret — an identifier, useless without auth.
+      "database_id": "81788e80-11ed-4047-9faa-af219b719e52",
 
       // Applied with `wrangler d1 migrations apply`, which records each file in a
       // `d1_migrations` table and refuses to run it twice. A migration invoked with

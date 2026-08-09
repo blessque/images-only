@@ -38,6 +38,7 @@ npm run verify:all   # browser suites: grid, Worker, admin end-to-end
 npm run perf         # seed 200 images and measure bytes, LCP and CLS
 npm run local:reset  # wipe local images and login attempts
 npm run db:migrate   # apply pending migrations (tracked; never re-runs one)
+                     # migrations/ is the ONLY definition of the schema
 ```
 
 The local admin password comes from `.dev.vars` (gitignored). Generate a real one with
@@ -48,9 +49,11 @@ The local admin password comes from `.dev.vars` (gitignored). Generate a real on
 Needs a free Cloudflare account, then once:
 
 ```bash
+npx wrangler login                    # fails behind a VPN — Cloudflare challenges datacenter IPs
 npx wrangler d1 create justimages     # paste database_id into wrangler.jsonc
+# enable R2 once in the dashboard, then:
 npx wrangler r2 bucket create justimages
-npm run db:remote                     # apply the schema to production
+npm run db:remote                     # apply migrations to production
 npm run hash-password                 # then `wrangler secret put` both values
 ```
 

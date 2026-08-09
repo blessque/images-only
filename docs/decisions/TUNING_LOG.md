@@ -474,6 +474,43 @@ and `total` still reach the component, but only to disable the arrows at the two
 
 ---
 
+## Decisions made — 2026-08-09 (iteration 12: first deploy, and the schema had two owners)
+
+### `migrations/` is now the ONLY definition of the schema
+The first production deploy failed on `no such table: images`. Cause: `worker/schema.sql`
+CREATED the tables and `migrations/` only TRANSFORMED them, so every local database worked
+(schema.sql was always run first) and a fresh one — production, on day one — had nothing for
+0001 to rebuild.
+
+Two sources of truth for one schema was the actual defect. `worker/schema.sql` is **deleted**;
+`0000_initial.sql` reproduces the pre-0001 shape with `IF NOT EXISTS` throughout, so it is a
+no-op on databases that predate it. Every database now reaches the current shape by one
+identical path. Replaying history costs a couple of table rebuilds on an empty database,
+once, and buys a single code path — worth it.
+
+### Miniflare keys local D1 by `database_id`, and that looks exactly like data loss
+Filling the real `database_id` into `wrangler.jsonc` made wrangler open a NEW, empty local
+database; the old one sat untouched beside it under the placeholder id. `SELECT COUNT(*)`
+returned 0 and it read as catastrophe. It was not — the rows were recovered with a plain
+`ATTACH DATABASE` copy.
+
+Worth carrying twice over: an empty table after a config change is **usually the wrong
+database, not a deleted one** — look for the old file before concluding anything. And the
+accidental fresh database was a perfect unplanned test that the 0000 baseline really does
+build from nothing, which is precisely what had just failed.
+
+### R2 must be enabled by hand in the dashboard once
+`wrangler r2 bucket create` returns `code: 10042 — Please enable R2 through the Cloudflare
+Dashboard`. Nothing in the CLI can do it; it is a one-time click on the account.
+
+### Cloudflare's OAuth login fails behind a VPN
+`wrangler login` returned a bot-challenge 403 (Ray ID `…-HEL`). The exit IP was a Hetzner
+datacenter in Finland, and Cloudflare challenges datacenter ranges hard. `api.cloudflare.com`
+was healthy throughout — it answered with a proper JSON error — so only the browser-facing
+handshake was affected. Disconnecting the VPN fixed it immediately.
+
+---
+
 ## Open issues
 
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `tight` fraction (1/4) are still taste
