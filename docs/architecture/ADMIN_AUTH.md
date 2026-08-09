@@ -73,12 +73,47 @@ permanent footnote.
 
 ---
 
-## Secrets
+## Where the credentials live
 
-| Secret | Where | Notes |
+Two sources, database first, resolved in `worker/credentials.ts`:
+
+| Source | When | Notes |
 |---|---|---|
-| `ADMIN_PASSWORD_HASH` | Worker secret | PBKDF2, high iteration count, stored with its salt |
-| `TOKEN_SECRET` | Worker secret | signs tokens; rotating it invalidates all live sessions |
+| `auth` table in D1 | a site claimed through `/api/setup` | the normal path |
+| `ADMIN_PASSWORD_HASH` + `TOKEN_SECRET` Worker secrets | set by hand | still works, still wins if the table is empty |
+
+Neither present means the site is **unclaimed**, which is a real state a fresh deployment
+starts in — not an error.
+
+### Why they moved out of the secret store
+
+The owner is a non-technical designer. Setting `ADMIN_PASSWORD_HASH` meant producing a
+PBKDF2 hash, installing Node to do it, and getting a `$`-delimited string past a shell that
+expands `$` — which cost two hours in one evening and is not a thing he can do at all. The
+"thirty seconds in the dashboard" recovery story below assumed a technical operator, and the
+moment the operator becomes the owner, that assumption inverts.
+
+**Trade-off, taken deliberately:** the hash and token secret are now readable by anyone with
+D1 access, where before they needed the secret store. The blast radius is the same in
+practice — account access was already game over — and a PBKDF2 hash is built to survive
+being read. The token secret genuinely is weaker for it, which is the price of the site
+being claimable without a terminal.
+
+It is a **separate table, not a `settings` row**: `readManifest` selects every settings row
+and hand-picks `name` and `contact`. Nothing leaks today, but a credential one careless
+refactor away from the public manifest is the wrong place to keep it.
+
+### The claim, and the race it opens
+
+An unclaimed site will hand admin to whoever asks first. `SETUP_CODE` — one word the owner
+invents when deploying, prompted for by the Deploy to Cloudflare button — gates that one
+request. It is not a password: it is used once, it is compared in constant time, and it is
+inert the moment the site is claimed. `CHECK (id = 1)` on the `auth` table makes "claimed
+once" a database invariant, so two simultaneous claims cannot both win regardless of the
+handler.
+
+A deployment with no `SETUP_CODE` is claimable by the first arrival. That is deliberate for
+local and manual installs; the button-driven path always sets one.
 
 Local dev reads them from `.dev.vars`, which is **gitignored** — and additionally denied to
 Claude in `.claude/settings.json`, so they cannot be read into a transcript.
@@ -100,8 +135,16 @@ keeping:** building account recovery adds an entire attack surface — a mail pr
 tokens, expiry windows, an enumeration endpoint — to a single-user site, in order to save
 one dashboard visit.
 
-**Forgotten password = rotate `ADMIN_PASSWORD_HASH` in the Cloudflare dashboard.** Thirty
-seconds, no new attack surface. Document it in the handover notes; do not build it.
+**Forgotten password = delete the `auth` row and claim the site again.** In the Cloudflare
+dashboard: D1 → `justimages` → Console → `DELETE FROM auth;` → reload the site and set a new
+password. Clicking, not a terminal — which is the whole point, since the person who forgets
+the password is the person who cannot use `wrangler`.
+
+(Where credentials come from Worker secrets instead, it remains
+`wrangler secret put ADMIN_PASSWORD_HASH`.)
+
+Building email reset would add a mail provider, reset tokens, expiry windows and an
+enumeration endpoint to a single-user site, to save one dashboard visit. Do not.
 
 ---
 

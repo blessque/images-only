@@ -14,6 +14,11 @@ memory/
 .dev.vars
 .dev.vars.*
 
+# ...except the template, which MUST be committed: the Deploy to Cloudflare button reads
+# `.dev.vars.example` from the repository to know which secrets to prompt the new owner for.
+# It contains names and placeholders only — never a value.
+!.dev.vars.example
+
 # Secrets
 .env
 .env.*

@@ -28,6 +28,15 @@ export const PBKDF2_ITERATIONS = 100_000;
 /** The runtime's ceiling. Asserted in the test suite, because nothing else catches it. */
 export const PBKDF2_MAX_ITERATIONS = 100_000;
 
+/**
+ * Minimum admin password length, enforced wherever a password is chosen.
+ *
+ * This is the ONLY credential guarding the site, it never expires, and account recovery is
+ * deliberately unbuilt — so the length floor is doing more work here than it would on a site
+ * with email reset behind it. See ADMIN_AUTH.md.
+ */
+export const MIN_PASSWORD_LENGTH = 12;
+
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);

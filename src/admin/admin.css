@@ -73,6 +73,25 @@
   color: #d08a8a;
 }
 
+/*
+ * Claim mode only. The one screen in the whole site that has to explain something, because
+ * it is the one moment the owner makes an irreversible choice — there is no password reset,
+ * only replacement. Two greys and no decoration, same register as everything else.
+ */
+.unlock-note {
+  flex: 1 0 100%;
+  max-width: 264px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8a8a8a;
+}
+
+/* Claim mode stacks: three fields side by side would wrap into an unreadable grid. */
+.unlock:has(.unlock-note) .unlock-input {
+  flex: 1 0 100%;
+}
+
 /* ── Drop overlay ───────────────────────────────────────────────────────── */
 
 .drop-overlay {

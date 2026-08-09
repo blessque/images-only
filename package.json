@@ -19,7 +19,7 @@
     "db:local": "wrangler d1 migrations apply justimages --local",
     "db:remote": "wrangler d1 migrations apply justimages --remote",
     "verify:admin": "node scripts/verify-admin.mjs",
-    "verify:all": "npm run verify && npm run verify:worker && npm run login:reset && npm run verify:admin",
+    "verify:all": "npm run verify && npm run verify:worker && npm run verify:setup && npm run login:reset && npm run verify:admin",
     "local": "npm run build && npm run db:local && wrangler dev",
     "local:reset": "wrangler d1 execute justimages --local --command \"DROP TABLE IF EXISTS images; DROP TABLE IF EXISTS settings; DROP TABLE IF EXISTS login_attempts; DROP TABLE IF EXISTS d1_migrations;\" && npm run db:local",
     "perf": "node scripts/perf.mjs",
@@ -27,7 +27,8 @@
     "login:reset": "wrangler d1 execute justimages --local --command \"DELETE FROM login_attempts;\"",
     "db:migrate:remote": "wrangler d1 migrations apply justimages --remote",
     "export": "node scripts/export-images.mjs",
-    "import": "node scripts/import-images.mjs"
+    "import": "node scripts/import-images.mjs",
+    "verify:setup": "node scripts/verify-setup.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

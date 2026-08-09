@@ -97,6 +97,28 @@ async function main() {
       check(response.status === 401, `${method} ${path} → 401 with a forged token`, `got ${response.status}`);
     }
 
+    // ── Setup / claim ────────────────────────────────────────────────────────
+    //
+    // This run has ADMIN_PASSWORD_HASH in .dev.vars, so it exercises the case that matters
+    // most for an EXISTING deployment: credentials in Worker secrets still work, and the
+    // new claim endpoint refuses to hand the site to anyone.
+    console.log('\nSetup');
+    const setupState = await fetch(`${BASE}/api/setup`);
+    const state = await setupState.json();
+    check(state.claimed === true, 'a site configured by Worker secrets reports itself claimed');
+
+    const takeover = await fetch(`${BASE}/api/setup`, {
+      method: 'POST',
+      body: JSON.stringify({ password: 'attacker-owns-this-now', code: '' }),
+    });
+    check(takeover.status === 409, `claiming an already-claimed site returns 409 (${takeover.status})`);
+
+    const stillWorks = await fetch(`${BASE}/api/login`, {
+      method: 'POST',
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    check(stillWorks.ok, 'the original password still works after a rejected takeover');
+
     // ── Login ────────────────────────────────────────────────────────────────
     console.log('\nLogin');
     const wrong = await fetch(`${BASE}/api/login`, {

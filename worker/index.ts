@@ -1,6 +1,14 @@
 import { VARIANT_WIDTHS, type ImageItem, type SizeClass } from '../src/lib/types';
 import { getObject, putObject, type StorageEnv } from './storage';
-import { bearerFrom, signToken, verifyPassword, verifyToken } from './auth';
+import {
+  bearerFrom,
+  constantTimeEqual,
+  MIN_PASSWORD_LENGTH,
+  signToken,
+  verifyPassword,
+  verifyToken,
+} from './auth';
+import { claimSite, readCredentials } from './credentials';
 import { clearAttempts, clientKey, registerAttempt } from './rateLimit';
 import {
   insertImage,
@@ -16,11 +24,21 @@ import {
 export interface Env extends StorageEnv {
   DB: D1Database;
   ASSETS: Fetcher;
-  ADMIN_PASSWORD_HASH: string;
-  TOKEN_SECRET: string;
+
+  // Optional: a deployment made from the Deploy to Cloudflare button has neither, and is
+  // claimed through /api/setup instead. See worker/credentials.ts and ADMIN_AUTH.md.
+  ADMIN_PASSWORD_HASH?: string;
+  TOKEN_SECRET?: string;
+
+  /**
+   * Gates the one-time claim, so a stranger who learns the URL first cannot take the site.
+   * A word the owner invents at deploy time — not a hash, and dead the moment it is used.
+   */
+  SETUP_CODE?: string;
 }
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
+const utf8 = new TextEncoder();
 const VALID_CLASSES = new Set<string>(['solo', 'wide', 'tight']);
 const VALID_RUNGS = new Set<number>(VARIANT_WIDTHS);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
@@ -52,7 +70,9 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
  * asserts rejection per route for exactly that reason. See ADMIN_AUTH.md.
  */
 async function requireAuth(request: Request, env: Env): Promise<boolean> {
-  return (await verifyToken(env.TOKEN_SECRET, bearerFrom(request))) !== null;
+  const credentials = await readCredentials(env);
+  if (!credentials) return false; // unclaimed: there is no session anyone could hold
+  return (await verifyToken(credentials.tokenSecret, bearerFrom(request))) !== null;
 }
 
 /**
@@ -159,12 +179,78 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     return json({ error: 'Bad request' }, 400);
   }
 
-  if (!env.ADMIN_PASSWORD_HASH || !(await verifyPassword(password, env.ADMIN_PASSWORD_HASH))) {
+  // An unclaimed site has no password to be wrong. Saying so is not an information leak —
+  // `GET /api/setup` reports the same thing to anyone — and without it the owner meets
+  // "Incorrect password" on a site that never had one, which is exactly the dead end this
+  // whole change exists to remove.
+  const credentials = await readCredentials(env);
+  if (!credentials) return json({ error: 'Not set up', setupRequired: true }, 409);
+
+  if (!(await verifyPassword(password, credentials.passwordHash))) {
     return json({ error: 'Incorrect password', remaining: limit.remaining }, 401);
   }
 
   await clearAttempts(env.DB, key);
-  return json({ token: await signToken(env.TOKEN_SECRET) });
+  return json({ token: await signToken(credentials.tokenSecret) });
+}
+
+/**
+ * First-run claim: reports whether the site is claimed, and claims it.
+ *
+ * Rate-limited on its own key. The limiter is keyed per client and a claim attempt is not a
+ * login attempt — sharing the counter would let a failed claim lock the owner out of a
+ * login, or the reverse.
+ */
+async function handleSetup(request: Request, env: Env): Promise<Response> {
+  if (request.method === 'GET') {
+    // `codeRequired` is not a leak: an attacker learns the same thing by posting once. It
+    // exists so the claim form does not show a setup-code field to someone who was never
+    // given one — a mystery field on the one screen that must not be confusing.
+    return json({
+      claimed: (await readCredentials(env)) !== null,
+      codeRequired: Boolean(env.SETUP_CODE),
+      minPasswordLength: MIN_PASSWORD_LENGTH,
+    });
+  }
+
+  const key = `setup:${clientKey(request)}`;
+  const limit = await registerAttempt(env.DB, key);
+  if (!limit.allowed) {
+    return json({ error: 'Too many attempts' }, 429, {
+      'retry-after': String(limit.retryAfterSeconds),
+    });
+  }
+
+  let password = '';
+  let code = '';
+  try {
+    const body = (await request.json()) as { password?: unknown; code?: unknown };
+    if (typeof body.password === 'string') password = body.password;
+    if (typeof body.code === 'string') code = body.code;
+  } catch {
+    return json({ error: 'Bad request' }, 400);
+  }
+
+  if ((await readCredentials(env)) !== null) {
+    return json({ error: 'Already set up' }, 409);
+  }
+
+  // Only enforced when a code was configured. A deployment without one is claimable by
+  // whoever arrives first, which is a deliberate convenience for local and manual installs
+  // — the button-driven path always sets it.
+  if (env.SETUP_CODE && !constantTimeEqual(utf8.encode(code), utf8.encode(env.SETUP_CODE))) {
+    return json({ error: 'Wrong setup code', remaining: limit.remaining }, 401);
+  }
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return json({ error: `Use at least ${MIN_PASSWORD_LENGTH} characters` }, 400);
+  }
+
+  const credentials = await claimSite(env, password);
+  if (!credentials) return json({ error: 'Already set up' }, 409);
+
+  await clearAttempts(env.DB, key);
+  return json({ token: await signToken(credentials.tokenSecret) });
 }
 
 async function handleUpload(request: Request, env: Env, url: URL): Promise<Response> {
@@ -334,6 +420,9 @@ export default {
     if (pathname.startsWith('/api/')) {
       if (pathname === '/api/images' && method === 'GET') {
         return json(await readManifest(env.DB), 200, { 'cache-control': 'no-cache' });
+      }
+      if (pathname === '/api/setup' && (method === 'GET' || method === 'POST')) {
+        return handleSetup(request, env);
       }
       if (pathname === '/api/login' && method === 'POST') return handleLogin(request, env);
       if (pathname === '/api/images' && method === 'POST') return handleCreate(request, env);

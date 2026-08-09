@@ -13,7 +13,7 @@ Two properties define it:
 ## Stack
 
 Vite + React 19 + TypeScript, on a single Cloudflare Worker serving both the static assets
-and the API. Images in R2, manifest in D1.
+and the API. Image bytes in Workers KV (or R2 where it is enabled), manifest in D1.
 
 ## Development
 
@@ -33,8 +33,8 @@ Other tasks:
 ```bash
 npm run dev          # grid only, against generated fixtures — no backend at all
 npm run fixtures     # regenerate the 42 test photographs (needs ffmpeg)
-npm test             # 27 unit tests: grid solver invariants + auth
-npm run verify:all   # browser suites: grid, Worker, admin end-to-end
+npm test             # 48 unit tests: grid solver invariants, auth, credentials
+npm run verify:all   # browser suites: grid, Worker, first-run setup, admin end-to-end
 npm run perf         # seed 200 images and measure bytes, LCP and CLS
 npm run local:reset  # wipe local images and login attempts
 npm run export       # download the whole gallery — photographs and metadata
@@ -46,17 +46,35 @@ npm run db:migrate   # apply pending migrations (tracked; never re-runs one)
 The local admin password comes from `.dev.vars` (gitignored). Generate a real one with
 `npm run hash-password`.
 
-## Deployment
+## Deploy your own
 
-Needs a free Cloudflare account, then once:
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/blessque/images-only)
+
+One click. It copies this repository into **your** GitHub account, creates **your** KV
+namespace and D1 database, applies the migrations, and asks you to invent a **setup code** —
+one word, which you type once.
+
+Then open the site and it asks you to choose a password. That is the whole setup: no
+terminal, no Cloudflare dashboard, no hash. The free tier costs nothing and needs no card.
+
+Click the button twice to run two separate sites from the same template.
+
+> The setup code exists so that nobody who stumbles on the URL before you can claim the site.
+> It stops mattering the moment you set your password.
+
+### Or by hand
 
 ```bash
 npx wrangler login                    # fails behind a VPN — Cloudflare challenges datacenter IPs
 npx wrangler d1 create justimages     # paste database_id into wrangler.jsonc
 npx wrangler kv namespace create IMAGES   # image bytes; R2 needs a card, KV does not
 npm run db:remote                     # apply migrations to production
-npm run hash-password                 # then `wrangler secret put` both values
+npm run deploy
 ```
 
-After that, pushes to `main` deploy via GitHub Actions. See `docs/architecture/OVERVIEW.md`
-and `.claude/commands/deploy.md`.
+Then open the site and choose a password, exactly as above. Setting
+`ADMIN_PASSWORD_HASH` and `TOKEN_SECRET` as Worker secrets still works and still takes
+precedence — that is how the original deployment runs — but it is no longer required.
+
+After the first deploy, pushes to `main` deploy via GitHub Actions
+(`.github/workflows/deploy.yml`). See `docs/architecture/OVERVIEW.md`.
