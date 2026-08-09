@@ -15,6 +15,7 @@ import {
   type StagedFile,
 } from './staging';
 import { formatFor } from './compressParams';
+import { buildGalleryZip, galleryFilename, saveBlob } from './download';
 import './admin.css';
 
 interface AdminLayerProps {
@@ -39,6 +40,7 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
   const [dragging, setDragging] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const compress = useCompressor();
@@ -60,6 +62,38 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
     const timer = setTimeout(() => setToast(null), toast.undo ? 8000 : 3500);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  /**
+   * Downloads the whole gallery as a zip — the same bytes `npm run export` produces.
+   *
+   * Reads only public routes, so it needs no token: the photographs are already served to
+   * anyone who visits. It lives behind the lock because it is an owner's action, not
+   * because the bytes are secret.
+   */
+  const downloadEverything = useCallback(async () => {
+    if (downloading !== null) return;
+    if (manifest.images.length === 0) {
+      notify('Nothing to download yet.');
+      return;
+    }
+
+    setDownloading('Preparing…');
+    try {
+      const result = await buildGalleryZip(manifest, ({ done, total }) => {
+        setDownloading(`${done} / ${total}`);
+      });
+      saveBlob(result.blob, galleryFilename());
+      notify(
+        result.missing.length > 0
+          ? `Downloaded ${result.files} files — ${result.missing.length} could not be read.`
+          : `Downloaded ${result.files} files.`,
+      );
+    } catch (error) {
+      notify(error instanceof Error ? `Download failed: ${error.message}` : 'Download failed.');
+    } finally {
+      setDownloading(null);
+    }
+  }, [downloading, manifest, notify]);
 
   const handleFailure = useCallback(
     (cause: unknown) => {
@@ -491,6 +525,9 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
         <span>Admin</span>
         <button type="button" onClick={() => fileInputRef.current?.click()}>
           Add photos ⌘I
+        </button>
+        <button type="button" onClick={downloadEverything} disabled={downloading !== null}>
+          {downloading === null ? 'Download everything' : `Downloading ${downloading}`}
         </button>
         <span className="admin-hint">
           Click an image, then ← → to reorder. Reloading the page locks it again.
