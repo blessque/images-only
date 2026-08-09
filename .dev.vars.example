@@ -1,0 +1,32 @@
+# Template for `.dev.vars` (gitignored). Copy this file, keep the copy off GitHub.
+#
+# The Deploy to Cloudflare button reads THIS file to decide what to ask the new owner for
+# during deployment. Every uncommented key below becomes a prompt — so there is exactly one,
+# and it is a word a person can invent.
+#
+# Anything you add here, someone deploying this template has to answer. Keep it to one line.
+
+# A word you make up, typed once while deploying. It gates the one-time claim, so that
+# nobody who finds the URL before you can open the site and set the password first.
+#
+# It is not the admin password. You never type it again, and it stops mattering the moment
+# the site is claimed. Anything unguessable is fine: `blue-kettle-rain`.
+SETUP_CODE="pick-any-word-you-like"
+
+
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# Everything below is OPTIONAL and deliberately commented out.
+#
+# The site normally gets its password from the browser: open it after deploying and it asks
+# you to choose one. These two variables are the older, manual route — still supported, and
+# still winning over the database when both exist — but they require generating a PBKDF2
+# hash, which is not something the site's owner should ever have to do.
+#
+# If you do want them, `npm run hash-password` prints both values.
+#
+# SINGLE QUOTES, not double. The hash contains `$`, which a shell expands: pasted into zsh
+# with double quotes, `pbkdf2$100000$SALT$DIGEST` silently becomes the six characters
+# `pbkdf2`, and then no password on earth logs you in. This cost an evening once.
+#
+# ADMIN_PASSWORD_HASH='pbkdf2$100000$SALT_GOES_HERE$DIGEST_GOES_HERE'
+# TOKEN_SECRET='any-long-random-string-rotating-it-logs-out-live-sessions'
