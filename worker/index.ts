@@ -443,6 +443,14 @@ export default {
       return json({ error: 'Not found' }, 404);
     }
 
+    // The owner's handbook. Routed explicitly because the catch-all below replaces ANY html
+    // the asset server returns with the inlined shell — /help would otherwise be the gallery.
+    // Unlinked from the public page on purpose: the only chrome there is the footer, and the
+    // link lives in the admin bar where it costs the wall of images nothing.
+    if ((pathname === '/help' || pathname === '/help.html') && (method === 'GET' || method === 'HEAD')) {
+      return env.ASSETS.fetch(new Request(new URL('/help.html', request.url), request));
+    }
+
     // Hashed build assets — immutable, straight through.
     if (pathname.startsWith('/assets/')) return env.ASSETS.fetch(request);
 

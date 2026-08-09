@@ -73,6 +73,16 @@
   color: #d08a8a;
 }
 
+/* Styled as one of the bar's buttons, because it is one as far as he is concerned. */
+.admin-help {
+  padding: 8px 12px;
+  border: 1px solid var(--admin-line);
+  background: #1c1c1c;
+  color: var(--admin-text);
+  font-size: 12px;
+  text-decoration: none;
+}
+
 /*
  * Claim mode only. The one screen in the whole site that has to explain something, because
  * it is the one moment the owner makes an irreversible choice — there is no password reset,

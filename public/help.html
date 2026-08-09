@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>How this site works</title>
+    <style>
+      /*
+       * Standalone on purpose: no build, no bundle, no font from /assets/.
+       * This is the page you read when something is wrong, so it must not depend on
+       * anything that could be the thing that is wrong.
+       */
+      :root { color-scheme: dark; }
+      body {
+        margin: 0;
+        padding: 48px 24px 96px;
+        background: #000;
+        color: #d8d8d8;
+        font: 15px/1.65 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      main { max-width: 34rem; margin: 0 auto; }
+      h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+      h2 {
+        margin: 44px 0 10px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+      }
+      p, li { margin: 0 0 10px; color: #b4b4b4; }
+      li { margin-bottom: 6px; }
+      ul { padding-left: 18px; margin: 0 0 10px; }
+      strong { color: #e8e8e8; font-weight: 600; }
+      kbd {
+        padding: 1px 5px;
+        border: 1px solid #333;
+        border-radius: 3px;
+        background: #141414;
+        color: #ddd;
+        font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code {
+        color: #cfcfcf;
+        font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .lede { color: #8a8a8a; margin-bottom: 4px; }
+      .note {
+        margin: 14px 0;
+        padding: 12px 14px;
+        border-left: 2px solid #333;
+        color: #9a9a9a;
+        font-size: 14px;
+      }
+      .warn { border-left-color: #7a5252; }
+      a { color: #d8d8d8; }
+      hr { margin: 44px 0 0; border: 0; border-top: 1px solid #1e1e1e; }
+      footer { max-width: 34rem; margin: 20px auto 0; color: #666; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="lede">justimages</p>
+      <h1>How this site works</h1>
+      <p>Everything is done from the site itself. You never need a terminal, a code editor, or
+      the Cloudflare dashboard for ordinary work.</p>
+
+      <h2>Getting into admin mode</h2>
+      <p>Press <kbd>Option</kbd> + <kbd>\</kbd>, or click the small grey lock at the very
+      bottom of the page. Type your password.</p>
+      <p>Admin mode switches off whenever you reload the page. That is deliberate — it means
+      you can never leave the site unlocked by accident.</p>
+
+      <h2>Adding photographs</h2>
+      <p>Drag files anywhere onto the page, or press <kbd>⌘</kbd> + <kbd>I</kbd>. They land in
+      a tray at the bottom where you can arrange them before publishing.</p>
+      <ul>
+        <li>Your photographs are shrunk <strong>on your own computer</strong>, before they
+        upload. A 10MB file usually leaves as about 600KB.</li>
+        <li>The tray shows the real before and after sizes, so you can judge it yourself.</li>
+        <li>Drag rows in the tray to set the order. That is the order they appear on the site.</li>
+        <li>Small files, under about 150KB, are uploaded untouched — there is nothing to gain
+        by re-compressing them.</li>
+      </ul>
+      <p><strong>High fidelity</strong> on a photograph keeps more detail at the cost of a
+      bigger file. Use it where an image really needs it, not everywhere.</p>
+
+      <h2>Arranging the grid</h2>
+      <p>Click any photograph to get its controls. Then <kbd>←</kbd> and <kbd>→</kbd>, or the
+      arrows on the bar, move it.</p>
+      <p>Each photograph has a size class. These do not change how big it is — they change
+      <strong>how many share a row</strong>:</p>
+      <ul>
+        <li><strong>solo</strong> — takes a whole row by itself.</li>
+        <li><strong>wide</strong> — shares a row with one or two others.</li>
+        <li><strong>tight</strong> — packs in with more.</li>
+      </ul>
+      <div class="note">
+        Photographs are never cropped, ever. The row height changes instead. That is why two
+        images with the same shape look the same width even on different size classes — inside
+        one row, everything shares a height.
+      </div>
+
+      <h2>Text on the page</h2>
+      <p>In admin mode the name and contact line at the bottom become editable. Click and
+      type. That is the only text on the whole site.</p>
+      <p><strong>Alt text</strong> describes a photograph for people using a screen reader,
+      and for search engines. It is filled in from the filename and you can improve it. A
+      camera filename like <code>IMG_4821</code> is left empty rather than used as nonsense.</p>
+
+      <h2>Deleting</h2>
+      <p>Delete shows an <strong>Undo</strong> button for a few seconds. Even after that, a
+      deleted photograph is kept for 30 days rather than destroyed — but getting it back after
+      the undo disappears needs a developer, so use Undo while it is there.</p>
+      <p>Everything saves by itself. There is no Save button and nothing to forget.</p>
+
+      <h2>Backing everything up</h2>
+      <p><strong>Download everything</strong> in the admin bar gives you a zip of every
+      photograph plus a list of them. Do this occasionally and keep it somewhere else.</p>
+      <p>That zip is not just a backup — it is what a developer would use to move this site to
+      another host entirely, without losing anything.</p>
+
+      <h2>If you forget your password</h2>
+      <p>It cannot be recovered — the site only stores a scrambled version that cannot be
+      turned back. It can be <strong>replaced</strong>, in about a minute:</p>
+      <ul>
+        <li>Sign in at <a href="https://dash.cloudflare.com">dash.cloudflare.com</a></li>
+        <li>Storage &amp; Databases → D1 → <code>justimages</code> → Console</li>
+        <li>Run: <code>DELETE FROM auth;</code></li>
+        <li>Reload your site. It will ask you to choose a new password.</li>
+      </ul>
+      <div class="note warn">
+        While the password is deleted, anyone who opens the site can claim it. Do these steps
+        one after another, not hours apart.
+      </div>
+      <p>After several wrong attempts the site stops accepting <em>any</em> password for
+      15 minutes, including the right one. That is protection against someone guessing. Wait
+      it out rather than trying harder.</p>
+
+      <h2>Limits worth knowing</h2>
+      <ul>
+        <li><strong>About 600 photographs</strong> of storage on the free plan.</li>
+        <li><strong>Around 250 photographs a day</strong> can be uploaded. The tray warns you
+        before a batch is too big — splitting it across two days costs nothing.</li>
+        <li>A newly published photograph can take up to a minute to appear everywhere. If one
+        looks broken immediately after uploading, wait a minute and reload.</li>
+      </ul>
+
+      <h2>Videos and GIFs</h2>
+      <p>Small animated GIFs work. Large ones lose their animation, and <strong>video is not
+      supported</strong> — it needs a different kind of hosting. Link to YouTube or Vimeo
+      instead, or ask a developer.</p>
+
+      <h2>If something looks broken</h2>
+      <ul>
+        <li>Reload the page first. Admin mode switches off, which is normal.</li>
+        <li>If images are missing right after uploading, wait a minute.</li>
+        <li>If the site will not accept your password, check you are not locked out from
+        repeated attempts, then use the reset steps above.</li>
+        <li>If the whole site is down, it is the host, not something you did. Your photographs
+        are safe.</li>
+      </ul>
+      <hr />
+    </main>
+    <footer>
+      Technical details live in the project's <code>docs/</code> folder and
+      <code>docs/RUNBOOK.md</code> — hand those to whoever helps you.
+    </footer>
+  </body>
+</html>
