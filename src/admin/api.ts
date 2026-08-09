@@ -7,12 +7,28 @@ export interface LoginResult {
   error: string | null;
 }
 
+/**
+ * `fetch` REJECTS on a dropped connection rather than returning a response, and the unlock
+ * dialog has no catch — so a flaky network, or a frozen static copy where nothing is
+ * listening at all, produced an unhandled rejection and a button stuck on "…".
+ */
+async function tryFetch(input: string, init?: RequestInit): Promise<Response | null> {
+  try {
+    return await fetch(input, init);
+  } catch {
+    return null;
+  }
+}
+
+const UNREACHABLE = 'Could not reach the server.';
+
 export async function login(password: string): Promise<LoginResult> {
-  const response = await fetch('/api/login', {
+  const response = await tryFetch('/api/login', {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify({ password }),
   });
+  if (!response) return { token: null, error: UNREACHABLE };
 
   if (response.status === 429) {
     const seconds = Number(response.headers.get('retry-after') ?? '900');
@@ -42,8 +58,10 @@ export interface SetupState {
 
 /** Whether this deployment has an owner yet. A fresh one, from the deploy button, does not. */
 export async function checkSetup(): Promise<SetupState> {
-  const response = await fetch('/api/setup');
-  const data = (await response.json().catch(() => ({}))) as Partial<SetupState>;
+  const response = await tryFetch('/api/setup');
+  const data = response
+    ? ((await response.json().catch(() => ({}))) as Partial<SetupState>)
+    : {};
   return {
     // Fail CLOSED: if this request fails we show the ordinary password form, never the
     // claim form. Offering to set a password on a site that already has one would be a
@@ -56,11 +74,12 @@ export async function checkSetup(): Promise<SetupState> {
 
 /** Claims an unclaimed site and logs straight in — he should not type the password twice. */
 export async function claimSite(password: string, code: string): Promise<LoginResult> {
-  const response = await fetch('/api/setup', {
+  const response = await tryFetch('/api/setup', {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify({ password, code }),
   });
+  if (!response) return { token: null, error: UNREACHABLE };
 
   if (response.status >= 500) {
     return { token: null, error: 'The server had an error. Try again.' };

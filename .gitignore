@@ -36,3 +36,6 @@ memory/
 
 # Gallery exports — your photographs, not source code
 /export/
+
+# Frozen static copies of the gallery — output, not source
+/freeze/

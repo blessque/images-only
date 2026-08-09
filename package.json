@@ -28,7 +28,9 @@
     "db:migrate:remote": "wrangler d1 migrations apply justimages --remote",
     "export": "node scripts/export-images.mjs",
     "import": "node scripts/import-images.mjs",
-    "verify:setup": "node scripts/verify-setup.mjs"
+    "verify:setup": "node scripts/verify-setup.mjs",
+    "freeze": "node scripts/freeze.mjs",
+    "verify:freeze": "node scripts/verify-freeze.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

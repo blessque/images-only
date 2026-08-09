@@ -39,6 +39,8 @@ npm run perf         # seed 200 images and measure bytes, LCP and CLS
 npm run local:reset  # wipe local images and login attempts
 npm run export       # download the whole gallery — photographs and metadata
 npm run import       # restore an export (also how the site changes storage or host)
+npm run freeze       # turn a live gallery into a static folder any host will serve
+npm run verify:freeze  # prove that folder still renders, uncropped, at CLS 0
 npm run db:migrate   # apply pending migrations (tracked; never re-runs one)
                      # migrations/ is the ONLY definition of the schema
 ```
