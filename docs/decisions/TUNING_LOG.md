@@ -589,6 +589,58 @@ self-describing format does not make free.
 
 ---
 
+## Decisions made — 2026-08-10 (the handover)
+
+### Credentials live in D1, with the Worker secrets as a fallback
+The owner is not technical. Setting `ADMIN_PASSWORD_HASH` meant generating a PBKDF2 hash and
+getting a `$`-delimited string past a shell that expands `$` — not a thing he can do, and it
+cost an evening proving it. A fresh deployment now ships **unclaimed** and asks for a
+password in the browser.
+
+The secrets path is **not** deprecated: `readCredentials` prefers the database and falls back
+to `env`, so an existing deployment keeps working with nothing changed. Asserted both ways.
+
+**Accepted cost:** the hash and token secret are readable by anyone with D1 access. The blast
+radius is unchanged in practice — account access was already game over — and a PBKDF2 hash is
+built to survive being read. The token secret genuinely is weaker for it. That is the price of
+the site being claimable without a terminal, and it is worth paying.
+
+### `SETUP_CODE` guards the claim; it is not a password
+An unclaimed site hands admin to whoever asks first. One word, invented at deploy time,
+compared in constant time, dead the moment the site is claimed. **Not** a plaintext admin
+password in the secret store, which was considered and rejected — identical effort for the
+owner, strictly worse security.
+
+`CHECK (id = 1)` on the `auth` table makes claimed-once a database invariant rather than an
+`if` in a handler, so two racing claims cannot both succeed. Prefer the constraint.
+
+### A separate `auth` table, never a `settings` row
+`readManifest` does `SELECT key, value FROM settings` and hand-picks `name` and `contact` into
+the manifest that is inlined into every page. Nothing leaks today; a credential one careless
+refactor from the public manifest is the wrong place to keep it. Make it structural.
+
+### The client must not report a 5xx as "Incorrect password"
+`api.ts` fell back to that string for any non-OK response, so a crashing Worker told the one
+person who knew the password, repeatedly, that he did not. Two hours. A 5xx and a 401 are
+different facts and must read differently. `fetch` also **rejects** on a dropped connection —
+now caught, since an unhandled rejection there is a button stuck on "…".
+
+### Server vs no server is the real axis — not Cloudflare vs not
+The user asked why photographs cannot simply be dropped into a folder by FTP, citing Aegea on
+Hostinger. He was right, and the docs were wrong: they framed every option as "Cloudflare or
+leaving Cloudflare", which made **shared hosting invisible** — it is not leaving, it is a
+different kind of server.
+
+A browser cannot list a directory, and the grid needs each photograph's proportions before any
+load (that is the CLS-0 guarantee). Something must open the folder and measure. PHP does it in
+`php/index.php`; the Worker does it at the edge. **Five pathways now, not four.**
+
+Corollary worth keeping: the admin panel's justification is **not** that uploading is hard —
+FTP is fine. It is that a 10MB camera file becomes ~600KB *before it leaves the laptop*. Any
+folder-based pathway has to resize server-side instead, which is why the PHP carries a resizer.
+
+---
+
 ## Open issues
 
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `tight` fraction (1/4) are still taste
@@ -611,6 +663,14 @@ self-describing format does not make free.
 - **The gallery is empty in production.** `export/` holds a test set (Unsplash, ChatGPT
   images, a real phone number in `settings`) and is deliberately **not** imported. The real
   photographs go in by drag-and-drop.
+- **`php/index.php` has never been executed.** No PHP and no container runtime on the dev
+  machine, so alone among the five pathways it is reviewed rather than run — every other one
+  has a `verify:*` script that executes it. Install PHP 8 and drive it against real
+  photographs before anyone deploys it; the likely failure points are GD availability,
+  `imagewebp`, and the `.htaccess` rewrite on a host that ignores `DirectoryIndex`.
+- **The live site still runs on Worker secrets**, not the claim flow. Intended — the fallback
+  exists for exactly this — but a clean handover means the owner deploys fresh from the button
+  into his own account and the old Worker is deleted. See `HANDOVER.md`.
 - **Live at `https://justimages.blessque.workers.dev`.** The workers.dev subdomain is
   account-wide and changing it breaks every existing link. No custom domain chosen yet.
 - **`.dev.vars` currently holds a throwaway local password** (`test-password-1234`) so the
