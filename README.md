@@ -145,3 +145,34 @@ precedence — that is how the original deployment runs — but it is no longer 
 
 After the first deploy, pushes to `main` deploy via GitHub Actions
 (`.github/workflows/deploy.yml`). See `docs/architecture/OVERVIEW.md`.
+
+## Your own domain
+
+Your site starts at `something.workers.dev`. Pointing a real domain at it takes about ten
+minutes, and **Cloudflare charges nothing for it** — the free plan needs no card. The only
+thing you pay for is the domain itself.
+
+This matters if you are in Russia: **no Visa or Mastercard is required anywhere in this.**
+
+1. **Buy the domain** at a registrar that takes your card — reg.ru, Timeweb, Beget and
+   nic.ru all accept Russian cards. A `.ru` is roughly 200–400₽ a year, often about 99₽ for
+   the first one. **Do not use Cloudflare Registrar**: that one does want an international
+   card, and it is the only part of Cloudflare that does.
+2. **Add the domain to Cloudflare** — dashboard → *Add a site* → paste the domain → choose
+   the **Free** plan. It will show you two nameservers.
+3. **Change the nameservers at the registrar** to those two. This is the only step that
+   waits on anyone else; `.ru` usually takes an hour or two, occasionally a day.
+4. **Attach it to the site** — your Worker → *Settings* → *Domains & Routes* → *Add* →
+   *Custom Domain* → your domain. The certificate is issued and renewed automatically.
+
+Two things worth knowing before you share the address with anyone:
+
+- **The `*.workers.dev` subdomain is chosen once per account and cannot be changed** without
+  breaking every link already shared. If you are attaching a real domain anyway, give out
+  only the real domain from the start.
+- **Cloudflare is intermittently throttled or blocked in Russia.** If your audience is
+  Russian, that is a bigger practical risk than any of the above. The domain keeps working;
+  the site may load badly. Two ways out, both keeping the same domain and neither needing a
+  foreign card — `npm run freeze` onto **Yandex Object Storage** (free certificate via
+  Certificate Manager; the bucket must be named exactly as the domain), or **[php/](php/)**
+  on ordinary Russian hosting. `docs/RUNBOOK.md` has both.
