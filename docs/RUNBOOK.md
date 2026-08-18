@@ -34,7 +34,13 @@ Normally the **Deploy to Cloudflare** button in the README: it forks the reposit
 owner's GitHub, provisions his KV and D1, applies migrations, and prompts for `SETUP_CODE`.
 He then claims the site in a browser.
 
-By hand:
+> ⚠️ **The button does not currently work.** On a fresh account it stops at the first screen
+> with *"There was a problem parsing the Wrangler configuration file"*, and it still does
+> after a fix was shipped for it. The cause is unknown; `decisions/TUNING_LOG.md` records
+> what has already been ruled out so the next attempt does not repeat it. Use the by-hand
+> sequence below, or the dashboard route after it.
+
+By hand — **this works today** and is the recommended route:
 
 ```bash
 npx wrangler login                        # fails behind a VPN — Cloudflare challenges datacenter IPs
@@ -45,6 +51,35 @@ npm run deploy                            # builds, applies migrations, ships
 
 Then open the site and choose a password. Setting `ADMIN_PASSWORD_HASH` and `TOKEN_SECRET`
 as Worker secrets still works and still takes precedence, but is no longer required.
+
+### If the button will not start
+
+> **UNTESTED.** Nobody has walked this route end to end. It is written from Cloudflare's
+> documentation and the dashboard's own labels, not from having done it — which in this
+> project is precisely the difference between a pathway and a guess. Read it, then verify it
+> before promising it to anyone. Delete this warning the day someone completes it.
+
+The point of this route is that it needs **no terminal** — it is the one to reach for when the
+person deploying cannot use one. Roughly seven steps:
+
+1. **Fork the repository** on GitHub into the new owner's account (the green *Fork* button).
+2. Cloudflare dashboard → **Workers & Pages** → **Create** → **Import a repository**, connect
+   GitHub, and pick the fork.
+3. Build command `npm run build`, deploy command `npm run deploy`. Do not deploy yet — it will
+   fail until the two resources below exist.
+4. **Storage & Databases → KV → Create a namespace**, name it `IMAGES`. Copy its id.
+5. **Storage & Databases → D1 → Create database**, name it `justimages`. Copy its id.
+6. Edit `wrangler.json` **in GitHub's web editor** (the pencil icon) and paste both ids into
+   `kv_namespaces[0].id` and `d1_databases[0].database_id`. Commit to `main`.
+7. Worker → **Settings → Variables and Secrets** → add a secret `SETUP_CODE` with any word
+   you invent. Then **Deployments → Retry deployment**.
+
+Open the site and choose a password, exactly as above.
+
+Step 6 is the weak point: it is a non-technical person editing JSON in a browser, and a
+missing quote breaks the deploy with an error they cannot read. **If someone technical is
+available at all, `npm run deploy` from their laptop into the owner's account is faster,
+safer, and equally final** — see `HANDOVER.md`.
 
 ### The free tier, in real numbers
 

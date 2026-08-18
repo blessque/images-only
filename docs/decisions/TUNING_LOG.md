@@ -647,35 +647,51 @@ folder-based pathway has to resize server-side instead, which is why the PHP car
 
 ## Decisions made — 2026-08-19 (iteration 16: the deploy button, tested for the first time)
 
-### The Wrangler config is plain JSON with NO comments — the dashboard demanded it
-Pressing **Deploy to Cloudflare** on a brand-new account, in incognito, failed at the first
-screen: *"There was a problem parsing the Wrangler configuration file."* The button is the
-whole handover — it is the only pathway the owner can walk without a terminal — so it being
-broken made four of the five pathways decorative.
+### The deploy button is BROKEN and the cause is still UNKNOWN — read this before guessing
+Pressing **Deploy to Cloudflare** on a brand-new account failed at the first screen:
+*"There was a problem parsing the Wrangler configuration file."* It still fails after a fix
+that was shipped, pushed, and retested. **Nothing below is a solution; it is a map of the
+ground already covered, so the next attempt starts further along.**
 
-What the investigation established, so nobody repeats it:
+Ruled out, with evidence:
 
-- The file was **valid JSONC** and valid against wrangler 4.120's own `config-schema.json`.
-  Ours was not malformed; the dashboard's parser is simply stricter and is not public.
-- **Comments were exonerated.** All 37 Wrangler configs in `cloudflare/templates` — every one
-  a live Deploy-to-Cloudflare target — were surveyed; `x402-proxy-template` alone carries 112
-  comment lines inside the JSON body. So annotation is not what the dashboard objects to.
-- **`migrations_dir` and `preview_id` appear in none of those 37.** They were the only two
-  fields we had that the known-good corpus did not, and both cost nothing to drop:
-  `migrations_dir` **defaults to `./migrations`**, and `preview_id` only ever applied to
-  `wrangler dev --remote`.
-- Real `database_id` / KV `id` values are **fine** — Cloudflare's own templates ship them and
-  the deploy flow provisions fresh resources and rewrites both.
+- **Our config was never malformed.** It parsed as valid JSONC and validated against
+  wrangler 4.120's own `config-schema.json`.
+- **Comments and trailing commas are categorically fine.** All 37 Wrangler configs in
+  `cloudflare/templates` — every one a live Deploy-to-Cloudflare target — were fetched and
+  parsed. `x402-proxy-template` carries 112 comment lines *and a trailing comma*, so the
+  dashboard's parser is a fully lenient JSONC parser. This kills the whole "strict JSON"
+  family of theories.
+- **Every key we use is ordinary in that corpus**: `observability` 36/36, `$schema` 26/36,
+  `assets` 22/36, `d1_databases` 7/36, `kv_namespaces` 6/36, `run_worker_first` 4/36. There
+  is no exotic field left to blame.
+- **Real `database_id` / KV `id` values are fine** — Cloudflare's own templates ship them and
+  the flow provisions fresh resources and rewrites both.
+- **The repository is not the obvious suspect either**: public, default branch `main`, 87
+  tracked files, exactly one `wrangler.json` and one `package.json`, and a
+  `.dev.vars.example` shape-identical to the six official templates that ship one
+  (`internal-sites-template` uses the same box-drawing comments and a quoted placeholder).
+- **GitHub is serving the new file** — `raw.githubusercontent.com/…/main/wrangler.json`
+  returns 200 and the old `.jsonc` 404s — so the dashboard was not reading a stale config.
 
-Since the exact objection could not be confirmed without a retest, the fix removes every
-deviation at once and goes further: `wrangler.jsonc` → **`wrangler.json`**, which cannot hold
-comments at all and so survives even a strict `JSON.parse`. The prose moved intact to
-[../architecture/OVERVIEW.md](../architecture/OVERVIEW.md#the-wrangler-configuration).
-**Do not restore the comments, `migrations_dir` or `preview_id`** — the first is now
-structurally impossible and the other two are the suspects.
+Still open, in order of suspicion: a **cached validation result** (the retest reused the same
+browser tab, which has not been ruled out); a **dashboard-side bug** unrelated to our
+content; something in a file the parse step reads *alongside* the config.
 
-If it ever fails again, bisect toward `saas-admin-template`, one field per push:
-`run_worker_first` → `$schema` → `assets.binding`.
+`wrangler.jsonc` → **`wrangler.json`** was shipped on the strict-JSON theory and is a
+**no-op** — kept only because it costs nothing and removes one variable. It is not a fix and
+must not be recorded as one.
+
+**The mistake worth keeping:** two fields (`migrations_dir`, `preview_id`) appeared in zero of
+37 templates, and that correlation was shipped as a cause. It was a reasonable ranking and a
+bad conclusion. A corpus difference narrows a search; **only a retest closes it**, and the
+retest was scheduled after the fix rather than before it.
+
+Next attempt starts here, cheapest first: test an official template URL in the same dialog
+(is it us or the dashboard?), then a fresh incognito window (was it cached?), then bisect on
+**probe branches** — `.github/workflows/deploy.yml` fires only on `main`, so probes cost
+nothing — using `https://github.com/blessque/images-only/tree/<branch>`, which the deploy
+flow accepts.
 
 ### A one-button deploy that "applies the migrations" — and never did
 Reading the button's path end to end turned up a second, independent bug: `deploy` was
@@ -693,17 +709,48 @@ a binding there: `wrangler d1 migrations list DB --local`.
 commands for one remote migration is the same *two owners for one schema* defect that cost
 iteration 12 a production outage.
 
+### GitHub Actions has never deployed anything, either
+Pushing the fix revealed a third dead mechanism: every run of `.github/workflows/deploy.yml`
+since it was written has failed on `CLOUDFLARE_API_TOKEN` — the two repository secrets it
+documents in its own header comment **were never set**. `npm ci`, `npm test` and
+`npm run build` pass; the first wrangler step then dies. The live site has only ever been
+deployed by hand from the author's laptop.
+
+Left red on purpose for now rather than deleted: the workflow is correct, it is the secrets
+that are missing, and deleting a correct workflow to make a badge green is the wrong repair.
+But an always-red workflow trains people to ignore it, so it is either wired up or removed —
+not left indefinitely.
+
 ### The lesson: a pathway nobody has walked is a guess
 `node/` earned this exact entry two iterations ago — a written escape route nobody has run is
-not a route. The deploy button was documented in three files, in the README's opening pitch,
-and in `HANDOVER.md`, and had never once been pressed. **Every pathway needs one execution
-against a clean account before it is described as working.** Of the five, `php/index.php` is
-now the last one still only reviewed rather than run.
+not a route. **Three** mechanisms in this repository claimed to work on evidence nobody had
+gathered: the deploy button (documented in three files and the README's opening pitch, never
+once pressed), the GitHub Actions deploy (red since the day it was committed), and the
+migrations the button was said to apply (never wired up at all).
+
+**Every pathway needs one execution against a clean account before it is described as
+working.** A green checkmark nobody has seen is a guess with better formatting. Of the five
+pathways, `php/index.php` is now the last one still only reviewed rather than run — and the
+deploy button has moved *backwards*, from "described as working" to "known broken".
 
 ---
 
 ## Open issues
 
+- **The Deploy to Cloudflare button does not work, cause unknown.** Fails on a fresh account
+  at the first screen. One fix was shipped on a wrong hypothesis and did not help; see the
+  iteration 16 entry for everything already ruled out. Next steps, cheapest first: test an
+  official template URL in the same dialog (us or the dashboard?), a fresh incognito window
+  (was the failure cached?), then bisect on probe branches via
+  `https://github.com/blessque/images-only/tree/<branch>`. **Until it is seen working, no
+  document in this repository may describe it as working.**
+- **`.github/workflows/deploy.yml` has never deployed anything** — `CLOUDFLARE_API_TOKEN` and
+  `CLOUDFLARE_ACCOUNT_ID` were never set as repository secrets, so every run has failed at
+  the first wrangler step. Either set them or delete the workflow; an always-red badge trains
+  people to ignore the one signal that is supposed to mean something.
+- **The dashboard fallback in `RUNBOOK.md` (*If the button will not start*) is UNTESTED.**
+  It is written from Cloudflare's documentation, not from having done it. Walking it once
+  would take twenty minutes and would remove the last unverified claim in the handover.
 - **`MAX_ROW_HEIGHT_VH` (1.4) and the wide-screen `tight` fraction (1/4) are still taste
   dials** tuned against synthetic fixtures. `solo` is now exempt from the clamp, so the
   clamp only governs shared rows — its value matters less than it did. Record any verdict here.

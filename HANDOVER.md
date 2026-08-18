@@ -13,8 +13,8 @@ laptop, your memory of how this works.
 | | Whose | How he gets it |
 |---|---|---|
 | The Cloudflare account | his | he creates it, with his own email |
-| The Worker, D1, KV | his | created inside his account by the deploy button |
-| The GitHub repository | his | the deploy button forks it there |
+| The Worker, D1, KV | his | created inside his account at step 2 |
+| The GitHub repository | his | forked or copied to his account at step 2 |
 | The domain | his | bought in his name, on his card |
 | The photographs | his | already his — **Download everything** in admin |
 | The password | his | he chooses it, in a browser, and you never learn it |
@@ -31,13 +31,32 @@ is not finished.
 His email, his password. Free, and **no card is required** — the site runs on Workers KV
 precisely so that stays true.
 
-### 2. He deploys it
+### 2. It gets deployed into his account
 
-From the repository's README, the **Deploy to Cloudflare** button. It copies the repository
-into his GitHub, creates his KV namespace and D1 database, applies the migrations, and asks
-him to invent a **setup code** — one word, typed once.
+> ⚠️ **The Deploy to Cloudflare button is currently broken.** On a fresh account it stops at
+> the first screen — *"There was a problem parsing the Wrangler configuration file"*. Try it
+> first, it costs thirty seconds; if it still fails, use one of the two routes below.
 
-You can sit next to him for this. He does not need you to do it.
+The button is meant to copy the repository into his GitHub, create his KV namespace and D1
+database, apply the migrations, and ask him to invent a **setup code** — one word, typed once.
+
+If it will not start:
+
+- **The dashboard route** — terminal-free, but about seven steps and one file edited in
+  GitHub's web editor. Written up in `docs/RUNBOOK.md` under *If the button will not start*.
+  **Nobody has run it yet**, so read it before you promise it to him.
+- **You deploy it once, from your laptop, next to him.** `wrangler login` into **his** account,
+  then `npm run deploy`. Three commands, ten minutes, and it is done.
+
+**Take the second one unless you have a reason not to.** This is the step people over-think.
+The handover is not about him never needing help *once*; it is about him never needing help
+*again* — and everything after this point already holds: uploads are drag-and-drop, the
+password is chosen in a browser and lives only in his head, the backup is one click, the
+footer is edited in place. **None of that runs through you, and none of it needs a terminal.**
+A one-time deploy you do sitting beside him does not put you back in the dependency chain.
+
+What would put you back in it is the account. Make sure `wrangler login` goes to **his**
+Cloudflare account and **his** GitHub, not yours — see the checklist at the end.
 
 ### 3. He claims the site
 

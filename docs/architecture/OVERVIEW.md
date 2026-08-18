@@ -76,14 +76,19 @@ broken-image mark; see `IMAGE_RETRY_DELAYS_MS`.
 
 ## The Wrangler configuration
 
-`wrangler.json` is **plain JSON with no comments**, and that is deliberate rather than
-careless. It used to be an annotated `wrangler.jsonc`; the **Deploy to Cloudflare** dashboard
-refused to read it — *"There was a problem parsing the Wrangler configuration file"* — and
-the button is the only pathway the site's owner can walk without a terminal. Everything the
-comments used to say now lives in this section. **Do not helpfully move it back into the
-config**: `.json` cannot hold comments, which is exactly the property that keeps the button
-working. See [../decisions/TUNING_LOG.md](../decisions/TUNING_LOG.md) for what the
-investigation ruled in and out.
+`wrangler.json` is **plain JSON with no comments**. It used to be an annotated
+`wrangler.jsonc`, and it was flattened while chasing a bug that is **still unfixed**: the
+**Deploy to Cloudflare** dashboard will not read our config — *"There was a problem parsing
+the Wrangler configuration file"* — and it still will not, after this change. Removing the
+comments was defensive, not proven; it is kept because it costs nothing and eliminates one
+variable, and it is **not** the reason the button will eventually work.
+
+Everything the comments used to say now lives in this section, which is the one good thing to
+come out of it. Moving the prose back into the config is not forbidden, but there is no
+reason to: it reads better here, and one fewer variable is worth having while the cause is
+unknown. See [../decisions/TUNING_LOG.md](../decisions/TUNING_LOG.md) for the map of what has
+already been ruled out — including that comments and trailing commas are provably fine, so
+that theory does not need testing twice.
 
 Field by field, and why each is there:
 
@@ -102,7 +107,8 @@ Field by field, and why each is there:
   namespace id belonging to one particular account, in a repository other people deploy.
 - **No `migrations_dir` on the D1 binding.** It **defaults to `./migrations`**, which is
   where the migrations are, so naming it changed nothing. It was removed because no official
-  Cloudflare template carries it and the deploy dashboard is the thing being kept happy.
+  Cloudflare template carries it — a suspicion in the deploy-button hunt that **did not pan
+  out**. Restoring it would be harmless; leaving it out is simply tidier.
   Migrations are still applied by `wrangler d1 migrations apply`, which records each file in
   a `d1_migrations` table and refuses to run it twice — **never** by `d1 execute --file`,
   which has no memory of having run and corrupted local data exactly once (iteration 9).
