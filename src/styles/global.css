@@ -8,6 +8,8 @@
   --bg: #000000;
   --surface: #0a0a0a; /* the box an image has not arrived into yet */
   --grey-line: #333333; /* broken-image rule, footer hairline */
+  --grey-lock: #4d4d4d; /* the footer lock — #333 lightened 10%, its own value so that
+                           lifting the lock does not also lift the hairline */
   --grey-text: #6e6e6e; /* footer copy, alt text on a broken tile */
   --grey-text-hover: #a8a8a8;
 

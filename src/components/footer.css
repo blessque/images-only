@@ -33,7 +33,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: var(--grey-line);
+  color: var(--grey-lock);
   cursor: pointer;
   transition: color 0.15s ease;
 }
