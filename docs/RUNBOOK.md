@@ -34,13 +34,11 @@ Normally the **Deploy to Cloudflare** button in the README: it forks the reposit
 owner's GitHub, provisions his KV and D1, applies migrations, and prompts for `SETUP_CODE`.
 He then claims the site in a browser.
 
-> ⚠️ **The button does not currently work.** On a fresh account it stops at the first screen
-> with *"There was a problem parsing the Wrangler configuration file"*, and it still does
-> after a fix was shipped for it. The cause is unknown; `decisions/TUNING_LOG.md` records
-> what has already been ruled out so the next attempt does not repeat it. Use the by-hand
-> sequence below, or the dashboard route after it.
+> The button broke in August 2026 on a semicolon inside a `package.json` script — see
+> `decisions/TUNING_LOG.md`, which carries the rule that keeps it working. It is verified as
+> far as the setup form; nobody has yet run a deploy through it to a live site.
 
-By hand — **this works today** and is the recommended route:
+By hand:
 
 ```bash
 npx wrangler login                        # fails behind a VPN — Cloudflare challenges datacenter IPs

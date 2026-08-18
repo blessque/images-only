@@ -647,51 +647,73 @@ folder-based pathway has to resize server-side instead, which is why the PHP car
 
 ## Decisions made — 2026-08-19 (iteration 16: the deploy button, tested for the first time)
 
-### The deploy button is BROKEN and the cause is still UNKNOWN — read this before guessing
-Pressing **Deploy to Cloudflare** on a brand-new account failed at the first screen:
-*"There was a problem parsing the Wrangler configuration file."* It still fails after a fix
-that was shipped, pushed, and retested. **Nothing below is a solution; it is a map of the
-ground already covered, so the next attempt starts further along.**
+### A SEMICOLON IN A package.json SCRIPT BROKE THE DEPLOY BUTTON — never inline SQL again
+**The rule, first, because it is the only part that must survive: no `package.json` script
+that mentions `wrangler` may contain a semicolon with anything after it.** Multi-statement
+SQL goes in a `.sql` file and is run with `--file`. Breaking this makes the Deploy to
+Cloudflare button fail — and it fails while pointing at a completely innocent file.
 
-Ruled out, with evidence:
+`local:reset` was:
 
-- **Our config was never malformed.** It parsed as valid JSONC and validated against
-  wrangler 4.120's own `config-schema.json`.
-- **Comments and trailing commas are categorically fine.** All 37 Wrangler configs in
-  `cloudflare/templates` — every one a live Deploy-to-Cloudflare target — were fetched and
-  parsed. `x402-proxy-template` carries 112 comment lines *and a trailing comma*, so the
-  dashboard's parser is a fully lenient JSONC parser. This kills the whole "strict JSON"
-  family of theories.
+```
+wrangler d1 execute justimages --local --command "DROP TABLE IF EXISTS images; DROP TABLE IF EXISTS settings; …"
+```
+
+The dashboard scans `package.json` scripts for wrangler invocations and **splits them on `;`
+as shell separators**, ignoring that the semicolon is inside a quoted argument. Segment two
+comes back as `DROP TABLE IF EXISTS settings`, it tries to read that as another wrangler
+invocation, fails — and reports *"There was a problem parsing the Wrangler configuration
+file."* **The named file was never the problem.** That misdirection cost two wrong fixes and
+an evening; the error message is the expensive half of the bug.
+
+Bisected over **21 throwaway repositories**, because static reasoning had run out. The
+isolating grid:
+
+| script | `;` | wrangler? | result |
+|---|---|---|---|
+| `--command "DELETE FROM login_attempts;"` | 1 | yes | passes |
+| long argument, 1 semicolon | 1 | yes | passes |
+| long argument, 0 semicolons | 0 | yes | passes |
+| `echo "a; b; c"` | 2 | **no** | passes |
+| `--command "DROP TABLE a; DROP TABLE b;"` | 2 | yes | **fails** |
+
+Length is irrelevant. **Both** conditions are required: a wrangler invocation *and* a
+semicolon with content after it. A single trailing semicolon splits to an empty segment and
+is discarded harmlessly — which is exactly why `login:reset` passed and `local:reset` did
+not, and why the bug hid for so long.
+
+Both resets now use `--file`. That is **not** the `d1 execute --file` iteration 9 forbids:
+that rule is about *migrations*, where a transform running twice corrupts data. A teardown
+guarded with `IF EXISTS` is meant to be re-runnable and no-ops the second time. The
+distinction is written into the header of both `.sql` files so it cannot be misread as a
+violation.
+
+#### What was ruled out on the way, so nobody re-runs it
+- **The Wrangler config was never involved, in either direction.** Our config in a bare
+  3-file repo: passes. Cloudflare's own `saas-admin-template` config dropped into our file
+  tree: fails.
+- **Comments and trailing commas are categorically fine.** All 37 configs in
+  `cloudflare/templates` were fetched and parsed; `x402-proxy-template` carries 112 comment
+  lines *and* a trailing comma. The parser is fully lenient JSONC.
 - **Every key we use is ordinary in that corpus**: `observability` 36/36, `$schema` 26/36,
-  `assets` 22/36, `d1_databases` 7/36, `kv_namespaces` 6/36, `run_worker_first` 4/36. There
-  is no exotic field left to blame.
-- **Real `database_id` / KV `id` values are fine** — Cloudflare's own templates ship them and
-  the flow provisions fresh resources and rewrites both.
-- **The repository is not the obvious suspect either**: public, default branch `main`, 87
-  tracked files, exactly one `wrangler.json` and one `package.json`, and a
-  `.dev.vars.example` shape-identical to the six official templates that ship one
-  (`internal-sites-template` uses the same box-drawing comments and a quoted placeholder).
-- **GitHub is serving the new file** — `raw.githubusercontent.com/…/main/wrangler.json`
-  returns 200 and the old `.jsonc` 404s — so the dashboard was not reading a stale config.
+  `assets` 22/36, `d1_databases` 7/36, `kv_namespaces` 6/36, `run_worker_first` 4/36.
+- **Real `database_id` / KV `id` values are fine**; the flow provisions and rewrites them.
+- **Not the dependencies, the lockfile, `.dev.vars.example`, the app source, `docs/`,
+  `.github/`, or the `cloudflare.bindings` block** — each isolated on its own repo, each
+  passed.
+- `wrangler.jsonc` → `wrangler.json`, dropping `migrations_dir` and `preview_id`: a **no-op**
+  aimed at the wrong file. Kept only because it costs nothing.
 
-Still open, in order of suspicion: a **cached validation result** (the retest reused the same
-browser tab, which has not been ruled out); a **dashboard-side bug** unrelated to our
-content; something in a file the parse step reads *alongside* the config.
-
-`wrangler.jsonc` → **`wrangler.json`** was shipped on the strict-JSON theory and is a
-**no-op** — kept only because it costs nothing and removes one variable. It is not a fix and
-must not be recorded as one.
-
-**The mistake worth keeping:** two fields (`migrations_dir`, `preview_id`) appeared in zero of
-37 templates, and that correlation was shipped as a cause. It was a reasonable ranking and a
-bad conclusion. A corpus difference narrows a search; **only a retest closes it**, and the
-retest was scheduled after the fix rather than before it.
-
-Next attempt starts here, cheapest first: test an official template URL in the same dialog
-(is it us or the dashboard?), then a fresh incognito window (was it cached?), then bisect on
-**probe branches** — `.github/workflows/deploy.yml` fires only on `main`, so probes cost
-nothing — using `https://github.com/blessque/images-only/tree/<branch>`, which the deploy
-flow accepts.
+#### Two mistakes worth keeping
+1. **A corpus difference was shipped as a cause.** `migrations_dir` and `preview_id` appeared
+   in zero of 37 templates — a real signal, correctly ranked, and wrong. A corpus difference
+   *narrows* a search; only a retest *closes* it. The retest was scheduled after the fix
+   instead of before.
+2. **The first bisect was confounded by its own design.** Probe branches were tested as
+   `…/tree/<branch>` against a control that used a *default* branch, so "both probes fail"
+   proved nothing. Every later probe used a fresh repository with the content on `main` —
+   and reused repos were abandoned once `raw.githubusercontent.com` was caught serving a
+   five-minute-stale copy of the previous round. **A bisect is only as good as its control.**
 
 ### A one-button deploy that "applies the migrations" — and never did
 Reading the button's path end to end turned up a second, independent bug: `deploy` was
@@ -737,13 +759,10 @@ deploy button has moved *backwards*, from "described as working" to "known broke
 
 ## Open issues
 
-- **The Deploy to Cloudflare button does not work, cause unknown.** Fails on a fresh account
-  at the first screen. One fix was shipped on a wrong hypothesis and did not help; see the
-  iteration 16 entry for everything already ruled out. Next steps, cheapest first: test an
-  official template URL in the same dialog (us or the dashboard?), a fresh incognito window
-  (was the failure cached?), then bisect on probe branches via
-  `https://github.com/blessque/images-only/tree/<branch>`. **Until it is seen working, no
-  document in this repository may describe it as working.**
+- **The deploy button reaches the Git-account screen, but nobody has completed a deploy
+  through it.** Verified 2026-08-19 only as far as the setup form — the parse failure is
+  gone. The resource-provisioning and first-boot half is still unwalked; the first person to
+  press it all the way through should record what happens here.
 - **`.github/workflows/deploy.yml` has never deployed anything** — `CLOUDFLARE_API_TOKEN` and
   `CLOUDFLARE_ACCOUNT_ID` were never set as repository secrets, so every run has failed at
   the first wrangler step. Either set them or delete the workflow; an always-red badge trains

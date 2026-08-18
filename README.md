@@ -36,13 +36,6 @@ No credit card. Room for about **600 photographs**. Nothing to maintain, ever.
 
 Press it twice and you have two separate sites.
 
-> ⚠️ **The button is currently failing** on a fresh Cloudflare account — it stops at the
-> first screen with *"There was a problem parsing the Wrangler configuration file"*. The
-> cause is not yet known and is being chased; see
-> [docs/decisions/TUNING_LOG.md](docs/decisions/TUNING_LOG.md) for what has been ruled out.
-> **Until it is fixed, use *If the button will not start* in
-> [docs/RUNBOOK.md](docs/RUNBOOK.md#a--deploy-to-cloudflare).** Everything after the first
-> deploy — uploading, the password, backups — is unaffected and needs no terminal.
 
 ### 2. Shared hosting — the folder one
 
@@ -131,9 +124,8 @@ into your GitHub account, creates your KV namespace and D1 database, applies the
 and asks you to invent a **setup code** — one word, typed once, which stops anyone who finds
 the URL first from claiming the site. Then the site asks you to choose a password.
 
-**That is what it is meant to do; right now it does not get past its first screen.** See the
-warning above. `docs/RUNBOOK.md` carries the dashboard route to use meanwhile, and the
-by-hand sequence below works today.
+The by-hand sequence below does the same thing from a terminal, and `docs/RUNBOOK.md` has a
+no-terminal dashboard route if the button is ever unavailable.
 
 The other four pathways: **[php/](php/)** for shared hosting, `npm run freeze` for static
 files, **[node/](node/)** for a VPS, and `docs/RUNBOOK.md` for R2.

@@ -77,18 +77,15 @@ broken-image mark; see `IMAGE_RETRY_DELAYS_MS`.
 ## The Wrangler configuration
 
 `wrangler.json` is **plain JSON with no comments**. It used to be an annotated
-`wrangler.jsonc`, and it was flattened while chasing a bug that is **still unfixed**: the
-**Deploy to Cloudflare** dashboard will not read our config — *"There was a problem parsing
-the Wrangler configuration file"* — and it still will not, after this change. Removing the
-comments was defensive, not proven; it is kept because it costs nothing and eliminates one
-variable, and it is **not** the reason the button will eventually work.
+`wrangler.jsonc` and was flattened while chasing a Deploy to Cloudflare failure that, it
+turned out, **had nothing to do with this file** — the trigger was a semicolon inside a
+`package.json` script, and the dashboard reported it against the config. See
+[../decisions/TUNING_LOG.md](../decisions/TUNING_LOG.md) for the bisect and, more
+importantly, the rule that keeps it fixed.
 
-Everything the comments used to say now lives in this section, which is the one good thing to
-come out of it. Moving the prose back into the config is not forbidden, but there is no
-reason to: it reads better here, and one fewer variable is worth having while the cause is
-unknown. See [../decisions/TUNING_LOG.md](../decisions/TUNING_LOG.md) for the map of what has
-already been ruled out — including that comments and trailing commas are provably fine, so
-that theory does not need testing twice.
+So: comments here are **harmless** — Cloudflare's own templates ship them, trailing commas
+included. Moving the prose back into the config would cost nothing. It stays in this section
+because it reads better with room to breathe, not because the config cannot hold it.
 
 Field by field, and why each is there:
 

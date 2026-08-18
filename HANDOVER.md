@@ -31,14 +31,18 @@ is not finished.
 His email, his password. Free, and **no card is required** — the site runs on Workers KV
 precisely so that stays true.
 
-### 2. It gets deployed into his account
+### 2. He deploys it
 
-> ⚠️ **The Deploy to Cloudflare button is currently broken.** On a fresh account it stops at
-> the first screen — *"There was a problem parsing the Wrangler configuration file"*. Try it
-> first, it costs thirty seconds; if it still fails, use one of the two routes below.
+From the repository's README, the **Deploy to Cloudflare** button. It copies the repository
+into his GitHub, creates his KV namespace and D1 database, applies the migrations, and asks
+him to invent a **setup code** — one word, typed once.
 
-The button is meant to copy the repository into his GitHub, create his KV namespace and D1
-database, apply the migrations, and ask him to invent a **setup code** — one word, typed once.
+You can sit next to him for this. He does not need you to do it.
+
+> The button was broken for a day in August 2026 and is fixed. It has been verified as far as
+> the setup form; **nobody has yet completed a deploy through it end to end.** Try it first —
+> if it stalls, either route below gets the same result, and `TUNING_LOG.md` wants to hear
+> what you saw.
 
 If it will not start:
 
