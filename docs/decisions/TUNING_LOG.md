@@ -390,8 +390,12 @@ unrecoverable** — no column separates them from the 3 rows that were legitimat
 
 The defect was never the SQL. It was that a migration was **re-runnable at all**. Now
 applied through `wrangler d1 migrations apply`, which records each file in `d1_migrations`
-and refuses to repeat it; `migrations_dir` sits inside the D1 binding (it is not a
-top-level wrangler field). **Never invoke a migration with `d1 execute --file`.**
+and refuses to repeat it. **Never invoke a migration with `d1 execute --file`.**
+
+*(Superseded in part, 2026-08-19: `migrations_dir` was set explicitly inside the D1 binding
+here — it has since been removed altogether, because it **defaults to `./migrations`** and
+its presence was a suspect in the Deploy to Cloudflare parse failure. The command and the
+tracking are unchanged; only the redundant field is gone.)*
 
 Second-order lesson: "idempotent" is a claim to *test*, not to reason about. Running it
 twice against a scratch database would have taken thirty seconds.
@@ -638,6 +642,63 @@ load (that is the CLS-0 guarantee). Something must open the folder and measure. 
 Corollary worth keeping: the admin panel's justification is **not** that uploading is hard —
 FTP is fine. It is that a 10MB camera file becomes ~600KB *before it leaves the laptop*. Any
 folder-based pathway has to resize server-side instead, which is why the PHP carries a resizer.
+
+---
+
+## Decisions made — 2026-08-19 (iteration 16: the deploy button, tested for the first time)
+
+### The Wrangler config is plain JSON with NO comments — the dashboard demanded it
+Pressing **Deploy to Cloudflare** on a brand-new account, in incognito, failed at the first
+screen: *"There was a problem parsing the Wrangler configuration file."* The button is the
+whole handover — it is the only pathway the owner can walk without a terminal — so it being
+broken made four of the five pathways decorative.
+
+What the investigation established, so nobody repeats it:
+
+- The file was **valid JSONC** and valid against wrangler 4.120's own `config-schema.json`.
+  Ours was not malformed; the dashboard's parser is simply stricter and is not public.
+- **Comments were exonerated.** All 37 Wrangler configs in `cloudflare/templates` — every one
+  a live Deploy-to-Cloudflare target — were surveyed; `x402-proxy-template` alone carries 112
+  comment lines inside the JSON body. So annotation is not what the dashboard objects to.
+- **`migrations_dir` and `preview_id` appear in none of those 37.** They were the only two
+  fields we had that the known-good corpus did not, and both cost nothing to drop:
+  `migrations_dir` **defaults to `./migrations`**, and `preview_id` only ever applied to
+  `wrangler dev --remote`.
+- Real `database_id` / KV `id` values are **fine** — Cloudflare's own templates ship them and
+  the deploy flow provisions fresh resources and rewrites both.
+
+Since the exact objection could not be confirmed without a retest, the fix removes every
+deviation at once and goes further: `wrangler.jsonc` → **`wrangler.json`**, which cannot hold
+comments at all and so survives even a strict `JSON.parse`. The prose moved intact to
+[../architecture/OVERVIEW.md](../architecture/OVERVIEW.md#the-wrangler-configuration).
+**Do not restore the comments, `migrations_dir` or `preview_id`** — the first is now
+structurally impossible and the other two are the suspects.
+
+If it ever fails again, bisect toward `saas-admin-template`, one field per push:
+`run_worker_first` → `$schema` → `assets.binding`.
+
+### A one-button deploy that "applies the migrations" — and never did
+Reading the button's path end to end turned up a second, independent bug: `deploy` was
+`npm run build && wrangler deploy`, with no migrations anywhere and no runtime schema
+bootstrap in `worker/`. A new owner's deploy would have **succeeded** onto an empty D1 and
+then failed on `no such table: images` — **iteration 12's failure exactly**, reappearing on
+the one pathway nobody had run. Both `README.md` and `docs/RUNBOOK.md` claimed otherwise.
+
+Migrations now run inside `npm run deploy`, and in `.github/workflows/deploy.yml`, against
+the **binding** (`DB`) and not the database name — the new owner can rename the database on
+the setup screen, and `justimages` would then match nothing. Verified that wrangler resolves
+a binding there: `wrangler d1 migrations list DB --local`.
+
+`db:migrate:remote` is deleted. It was an unreferenced duplicate of `db:remote`, and two
+commands for one remote migration is the same *two owners for one schema* defect that cost
+iteration 12 a production outage.
+
+### The lesson: a pathway nobody has walked is a guess
+`node/` earned this exact entry two iterations ago — a written escape route nobody has run is
+not a route. The deploy button was documented in three files, in the README's opening pitch,
+and in `HANDOVER.md`, and had never once been pressed. **Every pathway needs one execution
+against a clean account before it is described as working.** Of the five, `php/index.php` is
+now the last one still only reviewed rather than run.
 
 ---
 

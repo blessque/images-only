@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "justimages",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "IMAGES",
+      "id": "2bed4c9439cf4a6693b36678bfe6b72d"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "justimages",
+      "database_id": "81788e80-11ed-4047-9faa-af219b719e52"
+    }
+  ],
+  "observability": { "enabled": true }
+}

@@ -49,6 +49,19 @@ jobs:
       # or the Worker fails the deploy instead of shipping a broken bundle.
       - run: npm run build
 
+      # Migrations run BEFORE the deploy, and they run here rather than by hand: a migration
+      # file that sits in the repository waiting for someone to remember it is the same
+      # defect as no migration at all. `wrangler d1 migrations apply` records each file in
+      # `d1_migrations` and refuses to run it twice, so re-running a deploy is safe.
+      #
+      # `DB` is the BINDING, not the database name — the name differs between accounts
+      # (anyone deploying this template may rename it), the binding never does.
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply DB --remote
+
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

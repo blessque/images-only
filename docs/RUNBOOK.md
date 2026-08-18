@@ -38,10 +38,9 @@ By hand:
 
 ```bash
 npx wrangler login                        # fails behind a VPN — Cloudflare challenges datacenter IPs
-npx wrangler d1 create justimages         # paste database_id into wrangler.jsonc
+npx wrangler d1 create justimages         # paste database_id into wrangler.json
 npx wrangler kv namespace create IMAGES   # R2 needs a card; KV does not
-npm run db:remote
-npm run deploy
+npm run deploy                            # builds, applies migrations, ships
 ```
 
 Then open the site and choose a password. Setting `ADMIN_PASSWORD_HASH` and `TOKEN_SECRET`
@@ -64,7 +63,8 @@ account. No code changes — `worker/storage.ts` prefers R2 whenever the binding
 
 1. Enable R2 once in the dashboard (it fails with `code: 10042` until you do)
 2. `npx wrangler r2 bucket create justimages`
-3. Uncomment the `r2_buckets` block in `wrangler.jsonc`
+3. Add the `r2_buckets` block to `wrangler.json` — the exact snippet is in
+   [architecture/OVERVIEW.md](architecture/OVERVIEW.md#switching-to-r2)
 4. `npm run export && npm run import` to carry the photographs across
 
 ---
