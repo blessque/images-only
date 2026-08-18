@@ -193,6 +193,59 @@ idempotent** — running it twice once corrupted real data, because `medium` is 
 name and a new one. Never apply migrations with `d1 execute --file`; always
 `wrangler d1 migrations apply`.
 
+### "You fixed it but my site still has the bug"
+
+**His site does not watch this repository.** The Deploy to Cloudflare button did not fork it
+— it squashed the whole history into **one commit** (`source repo import`, authored by
+`cloudflare[bot]`) and pushed that into a new repo in his account. There is no fork link, no
+*Sync fork* button, and `git merge-base` finds nothing in common, so even a terminal `git
+pull` refuses with *"unrelated histories"*. **He cannot update his own site by any route
+that does not involve you.** Verified 2026-08-19 against a real button deployment.
+
+So the fix is to remove him from the loop entirely:
+
+1. **Rule out his browser first** — ⌘⇧R / Ctrl-Shift-R. Half of "nothing changed" is cache.
+2. **He adds you as a collaborator, once**: his repo → *Settings* → *Collaborators* →
+   *Add people* → your username. That is the last time he touches GitHub.
+3. **You run `bash scripts/push-update.sh`** after adding his repo URL to its `COPIES` list.
+   His Workers Build fires on the push; the site is live in about three minutes.
+4. **He checks it worked**: Cloudflare → his Worker → *Deployments* → a new entry with a
+   green tick, then ⌘⇧R.
+
+Tell him two things not to do: **do not press the blue Deploy button again** (it builds a
+new, empty site — his photographs will not be on it), and **do not delete anything** in
+Cloudflare without asking.
+
+Understand what step 2 grants before you ask for it: his Worker auto-deploys whatever
+reaches `main`, and that Worker holds his D1 and KV bindings, so **push access is
+effectively access to his photographs**. It also means one careless push, fanned out across
+several sites, takes down several live portfolios at once. Test on your own deployment
+first — that is what it is for.
+
+### The Worker was deleted, or redeployed, and the gallery is empty
+
+**Deleting a Worker does not delete the photographs.** KV namespaces and D1 databases are
+account-level resources; removing the Worker removes only the script and its bindings. The
+data sits there intact.
+
+What empties the site is **redeploying with the button**, because that provisions *new*
+blank resources and binds those instead. The old ones are still in the account, orphaned.
+To reattach them — no terminal needed:
+
+1. Cloudflare → *Storage & Databases* → **KV**, copy the **old** namespace ID; same for **D1**.
+2. In his repo on github.com, open `wrangler.json` with the pencil icon.
+3. Replace `kv_namespaces[0].id` and `d1_databases[0].database_id` with the old values, commit.
+4. Workers Builds redeploys by itself. Every photograph returns — and because D1 also holds
+   the `auth` table, the site comes back **already claimed**, with his existing password.
+
+Note the URL changes when a Worker is recreated, which is one more argument for attaching a
+real domain early: that follows him across redeploys.
+
+**The backup is not a restore button.** *Download everything* produces a zip, but putting it
+back is `npm run import`, which needs Node and a terminal. There is no restore in the admin
+UI. For him the real recovery is that the photographs are on his own Mac and he drags them
+back in. Tell him that plainly rather than letting him believe the zip saves him.
+
 ---
 
 ## Getting the data out

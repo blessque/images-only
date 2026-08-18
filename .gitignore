@@ -9,6 +9,9 @@ CLAUDE.md
 memory/
 .claude/
 
+# Clones of other people's deployed sites, made by scripts/push-update.sh
+/.copies/
+
 # Cloudflare
 .wrangler/
 .dev.vars
