@@ -6,7 +6,7 @@
   "cloudflare": {
     "bindings": {
       "SETUP_CODE": {
-        "description": "Invent a word and type it once — `blue-kettle-rain` is fine. It stops anyone who finds the address before you from claiming the site. It is **not** the password: the site asks you to choose that in the browser, afterwards."
+        "description": "**Type your own word here and write it down** — `blue-kettle-rain` is the right shape. This field is masked, so you cannot read it back, and you will be asked for it once more in the browser. It stops anyone who finds the address before you from claiming the site. It is **not** the password: you choose that in the browser, afterwards. Left blank, there is no gate — whoever opens the site first owns it."
       },
       "DB": {
         "description": "Holds the list of photographs — their order and their proportions. Not the pictures themselves."

@@ -731,6 +731,29 @@ a binding there: `wrangler d1 migrations list DB --local`.
 commands for one remote migration is the same *two owners for one schema* defect that cost
 iteration 12 a production outage.
 
+### `.dev.vars.example` values are PRE-FILLED into the deploy form — so leave them empty
+Walking the button one screen further turned up a security hole of our own making.
+`.dev.vars.example` shipped `SETUP_CODE="pick-any-word-you-like"`, on the assumption that
+Cloudflare reads the **keys** and prompts for values. It reads the **values** too, and
+pre-fills them into a **masked** field. So the placeholder became the real setup code of
+every site deployed from this repository — a secret published in a public file, gating
+nothing, and the deployer could not even see that it had happened.
+
+`SETUP_CODE=` is now empty. An empty field is visibly empty; a masked pre-filled one is
+indistinguishable from a masked field you typed yourself. That visibility *is* the fix.
+
+The residual risk is the opposite one — blank means no gate, and the site goes to whoever
+opens it first. That is a documented, deliberate fallback (`worker/index.ts:238`), and it is
+the better failure: a person who skips the field has an unguarded site for the ten minutes
+before they claim it, whereas a person who trusts the placeholder has a *permanently
+predictable* one. The `cloudflare.bindings` description on that screen now says both things
+outright, including "write it down" — the field cannot be read back.
+
+Cloudflare's own templates are split on this: `saas-admin-template` ships
+`API_TOKEN=your_token_here`, `workers-builds-notifications-template` ships an empty
+`CLOUDFLARE_API_TOKEN=`. For a secret the user must **invent and remember**, only empty is
+correct.
+
 ### GitHub Actions has never deployed anything, either
 Pushing the fix revealed a third dead mechanism: every run of `.github/workflows/deploy.yml`
 since it was written has failed on `CLOUDFLARE_API_TOKEN` — the two repository secrets it

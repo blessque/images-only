@@ -5,13 +5,23 @@
 # and it is a word a person can invent.
 #
 # Anything you add here, someone deploying this template has to answer. Keep it to one line.
-
-# A word you make up, typed once while deploying. It gates the one-time claim, so that
-# nobody who finds the URL before you can open the site and set the password first.
 #
-# It is not the admin password. You never type it again, and it stops mattering the moment
-# the site is claimed. Anything unguessable is fine: `blue-kettle-rain`.
-SETUP_CODE="pick-any-word-you-like"
+# LEAVE THE VALUES EMPTY. The button does not only read the KEYS — it pre-fills the VALUE
+# into a masked field the deployer cannot read. A placeholder here therefore becomes the
+# real secret of every site deployed from this repository, published, in a public file.
+# `SETUP_CODE="pick-any-word-you-like"` shipped for one evening and did exactly that.
+# An empty value leaves the field visibly blank, which is the only state a person can check.
+
+# A word you make up, typed while deploying. It gates the one-time claim, so that nobody who
+# finds the URL before you can open the site and set the password first.
+#
+# Type your own — anything unguessable, `blue-kettle-rain` is the right shape — and write it
+# down until the site is claimed: the deploy form masks it, so you cannot read it back.
+# Leaving it blank is allowed and means NO gate: whoever opens the site first owns it.
+#
+# It is not the admin password. You choose that in the browser, afterwards, and this stops
+# mattering the moment you do.
+SETUP_CODE=
 
 
 # ─────────────────────────────────────────────────────────────────────────────────────────

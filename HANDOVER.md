@@ -35,7 +35,16 @@ precisely so that stays true.
 
 From the repository's README, the **Deploy to Cloudflare** button. It copies the repository
 into his GitHub, creates his KV namespace and D1 database, applies the migrations, and asks
-him to invent a **setup code** — one word, typed once.
+him to invent a **setup code** — one word.
+
+**Watch the setup-code field.** It is masked, he cannot read it back, and he is asked for it
+again in the browser a few minutes later. Have him type it and write it down before pressing
+Deploy. If he loses it, it is replaceable in the Worker's *Settings → Variables and Secrets*
+— but only until the site is claimed.
+
+Everything else on that screen can stay as it is: the build and deploy commands come from
+`package.json` and are correct, the D1 name is free to change (migrations reference the
+binding, not the name), and the API token is created automatically.
 
 You can sit next to him for this. He does not need you to do it.
 
