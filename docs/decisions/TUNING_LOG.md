@@ -847,6 +847,128 @@ worse than no test.
 
 ---
 
+## Decisions made — 2026-08-19 (iteration 18: Safari was shipping PNG and not saying so)
+
+### `convertToBlob`'s `type` is a request, not a guarantee — the same lesson, one function along
+
+Reported as *"it turns a 200KB image into 5MB"*. In **Safari**, uploads came out 8-12x
+LARGER: `160 KB → 1.3 MB`, `906 KB → 4.4 MB`. In Chrome, the same file through the same code
+is `160 KB → 62 KB`, a 61% saving. **The file was never the variable. The browser was.**
+
+`OffscreenCanvas.convertToBlob({type:'image/webp'})` is a request. The spec says a browser
+that cannot produce the type **silently falls back to `image/png`** — no error, no warning.
+Safari cannot encode WebP from a canvas (confirmed against MDN/caniuse, not only inferred),
+so every rung was a PNG of a photograph: 10-20x the bytes, `quality` ignored, and the budget
+search burning five full PNG encodes per rung to change nothing at all.
+
+`pickColorSpace()` — twenty lines away — already says *"asking is the ONLY honest test:
+passing `colorSpace` is a request, not a guarantee"*. The encoder type never got the same
+treatment, and the failure it hid was two orders of magnitude larger.
+
+`pickEncoder()` now probes once per worker, and checks **two** things, because the first
+alone lets the second through:
+
+1. `blob.type` really is `image/webp` — catches the silent PNG fallback.
+2. `quality: 0.2` on a noise canvas comes back materially smaller than `quality: 0.9` —
+   catches an encoder that accepts the type and ignores quality, which is indistinguishable
+   by type and leaves every byte budget downstream a wish.
+
+The native encoder also **asserts** the type of what it got back and throws otherwise. The
+probe should make that unreachable; it exists so that if it ever is reached, it is one red
+row in the tray rather than a gallery quietly full of PNGs.
+
+### A JPEG fallback was built, and REJECTED — WebP stays WebP
+
+The first fix fell back to a JPEG ladder where WebP could not be encoded. It was wrong on the
+user's correction, and the correction was right: **JPEG has no alpha channel**, so every
+transparent image uploaded in Safari would have been silently flattened — the exact
+"composite onto black" trade *declined* one iteration earlier, reintroduced through the back
+door and conditional on which browser he happened to open. A WebP that arrives must stay a
+WebP. Do not reintroduce a cross-format ladder.
+
+### libwebp in wasm, and it is indistinguishable from the native encoder
+
+`@jsquash/webp` — libwebp compiled to wasm, repackaged from Squoosh. The first new dependency
+in the project, approved explicitly for this. Measured against Chrome's own encoder on a real
+2400x1600 photograph:
+
+| | wasm | native Chrome |
+|---|---|---|
+| bytes at q92 | 1,105,292 | 1,103,082 |
+| time | 1,066 ms | 386 ms |
+
+**0.2% apart**, because Chrome's canvas encoder *is* libwebp. So a Safari upload produces a
+ladder indistinguishable from a Chrome one and the archive stays uniform. Through the real
+build, fallback forced: `3dceb395…jpg` → top rung **65,468** against native's 63,644 — and
+against **1.3 MB** in Safari today. A full four-rung ladder takes 1.7 s versus 1.1 s native.
+
+Cost, and where it lands: ~346 KB of wasm plus ~40 KB of glue, in **its own chunk behind a
+dynamic import inside the worker**. A visitor downloads none of it; a Chrome admin downloads
+none of it; only a Safari admin pays it, once. This required `worker: { format: 'es' }` in
+`vite.config.ts` — Vite's default `iife` worker format cannot express a dynamic import, so it
+inlined the whole encoder into the worker chunk and every admin paid for it.
+
+The order is: native, then wasm, then **no ladder at all** — the original is kept rather than
+converted. Every one of those decisions is made in the worker, not the UI, so a slow probe
+can never race a dropped file into the wrong path.
+
+### The wasm encoder writes no colour profile, so it is fed sRGB
+
+Measured: the native encoder emits an `ICCP` chunk (520 bytes for a Display-P3 canvas); the
+wasm encoder emits none, and the same pixels then decode as `rgb(230,26,51)` instead of
+`rgb(252,0,39)` — untagged WebP is read as sRGB. Handing libwebp P3 values would ship a file
+whose pixels mean one thing and whose absent tag says another.
+
+So the wasm path reads out with `getImageData(…, { colorSpace: 'srgb' })`. A P3 photograph
+uploaded in Safari loses gamut and keeps its colour **correct**, which is the right way round
+for a portfolio. Rejected as over-building for now: lifting the platform's ICC profile out of
+a native JPEG's APP2 segment and writing it into an `ICCP` chunk ourselves. It would give
+full parity and the container work is already half-written in `webp.ts` — worth revisiting
+only if the gamut difference is ever actually visible to him.
+
+### "High fidelity" is gone. One checkbox: "No compression"
+
+The row had two controls that were really one axis, and which one you got depended on file
+size — "High fidelity" over 150KB, "No compression" under it. So a 5MB photograph could not
+be kept untouched **at all**, which is the one thing a designer most wants to be able to do.
+
+Now: one checkbox on every row, at every size. Checked, the original bytes go up exactly as
+they are — pixels, ICC profile, EXIF and transparency all intact. Unchecked, the ladder runs
+and everything becomes WebP. It starts **checked under 150KB** and **unchecked over it**, so
+compression is automatic where it pays and absent where it would only cost quality.
+
+This supersedes the iteration-15 decision that made "High fidelity" a deliberate per-image
+escape hatch. It is the same idea, taken to its complete form: the reason to raise quality
+for one image was always "do not damage this one", and the original does that perfectly.
+`budgetFor()` and `startingQuality()` lost their `highFidelity` parameter with it.
+
+### Compression may never make an image larger
+
+If the largest rung comes out no smaller than the source, the ladder is thrown away and the
+original kept. The tray then says **why** — `untouched — already smaller` — because an
+unexplained "untouched" on a 4MB photograph looks exactly like compression having silently
+failed, which for one iteration is precisely what it was. Same for a disabled checkbox: it
+carries its cause inline rather than being greyed out for no visible reason.
+
+### Consequences accepted with it
+
+- **A TIFF cannot be kept.** No browser renders one, so "keep the original" would store an
+  image the gallery can never show. It must take the ladder; where no encoder exists, the row
+  fails with that stated.
+- **`MAX_UPLOAD_BYTES` moved 8 MB → 24 MB.** It was sized for variants; now that untouched
+  originals are a normal upload, 8 MB rejected ordinary camera files for no visible reason.
+  24 MB sits under Workers KV's 25 MiB per-value ceiling, and the 413 now names the limit.
+
+### `Tile.tsx` rewrote the srcset with a regex, and that regex stopped matching
+
+The retry cache-buster was `srcSet.replace(/\.webp /g, …)` inside the component — string
+surgery on a finished string, in a place no unit test could reach. Found while the ladder
+could briefly be `.jpg`, where it matched nothing and the retry would have silently
+re-requested the same cached 404 it exists to escape. Kept even though the ladder is webp
+again: `srcSetFor` takes the suffix now, and it is four unit tests instead of a regex.
+
+---
+
 ## Open issues
 
 - **The deploy button reaches the Git-account screen, but nobody has completed a deploy

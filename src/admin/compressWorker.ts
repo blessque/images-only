@@ -17,22 +17,19 @@ import {
   budgetFor,
   startingQuality,
 } from './compressParams';
+import { type Encoder, type EncoderKind, pickEncoder } from './encoder';
+import { downscale, fit } from './resize';
 import { alphaBytes } from './webp';
 
 export interface CompressRequest {
   jobId: string;
   file: File;
   /**
-   * `passthrough` uploads the source bytes UNTOUCHED — no ladder, no re-encode. Chosen for
-   * small files, where re-encoding costs quality and buys nothing.
+   * `passthrough` uploads the source bytes UNTOUCHED — no ladder, no re-encode. It is the
+   * lossless escape hatch, available at any size, and the default under 150KB.
    */
   mode: 'ladder' | 'passthrough';
-  /**
-   * Ladder mode only. Raises this image's starting QUALITY and its byte budget — the
-   * escape hatch for fine grain or subtle gradients. Per image, reversible, never global.
-   */
-  highFidelity: boolean;
-  /** Passthrough mode only: the extension the original bytes are stored under. */
+  /** The extension the original bytes would be stored under, or '' if we cannot serve them. */
   format: string;
 }
 
@@ -44,8 +41,21 @@ export interface VariantResult {
   height: number;
 }
 
+/**
+ * Why an image ended up untouched. The tray says which, because "untouched" for a reason he
+ * did not choose needs explaining — a greyed-out control with no cause is how a
+ * non-technical owner concludes the site is broken.
+ */
+export type PassthroughReason =
+  | 'chosen'
+  /** The ladder ran and came out no smaller than the source, so it was thrown away. */
+  | 'larger'
+  /** No WebP encoder at all — not even the wasm one would load. */
+  | 'no-encoder';
+
 export type CompressResponse =
   | { type: 'progress'; jobId: string; rung: number }
+  | { type: 'capabilities'; encoder: EncoderKind }
   | {
       type: 'done';
       jobId: string;
@@ -54,58 +64,10 @@ export type CompressResponse =
       variants: VariantResult[];
       colorSpace: string;
       passthrough: boolean;
+      passthroughReason: PassthroughReason | null;
       format: string;
     }
   | { type: 'error'; jobId: string; message: string };
-
-function fit(width: number, height: number, longEdge: number) {
-  const scale = Math.min(1, longEdge / Math.max(width, height));
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
-/**
- * Progressive halving before the final draw.
- *
- * A single `drawImage` from 6000px to 400px is a 15x reduction, and the browser's filter
- * samples too sparsely at that ratio — fine detail aliases into shimmer, which on a
- * photography portfolio reads as a bad photograph rather than a bad resize. Halving until
- * within 2x keeps every step inside the filter's competence.
- */
-function downscale(
-  source: ImageBitmap | OffscreenCanvas,
-  targetWidth: number,
-  targetHeight: number,
-  colorSpace: PredefinedColorSpace,
-): OffscreenCanvas {
-  let currentWidth = source.width;
-  let currentHeight = source.height;
-  let current: ImageBitmap | OffscreenCanvas = source;
-
-  while (currentWidth > targetWidth * 2 && currentHeight > targetHeight * 2) {
-    const nextWidth = Math.max(targetWidth, Math.round(currentWidth / 2));
-    const nextHeight = Math.max(targetHeight, Math.round(currentHeight / 2));
-    const step = new OffscreenCanvas(nextWidth, nextHeight);
-    const stepContext = step.getContext('2d', { colorSpace });
-    if (!stepContext) throw new Error('2d context unavailable');
-    stepContext.imageSmoothingEnabled = true;
-    stepContext.imageSmoothingQuality = 'high';
-    stepContext.drawImage(current, 0, 0, nextWidth, nextHeight);
-    current = step;
-    currentWidth = nextWidth;
-    currentHeight = nextHeight;
-  }
-
-  const canvas = new OffscreenCanvas(targetWidth, targetHeight);
-  const context = canvas.getContext('2d', { colorSpace });
-  if (!context) throw new Error('2d context unavailable');
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = 'high';
-  context.drawImage(current, 0, 0, targetWidth, targetHeight);
-  return canvas;
-}
 
 /**
  * The bytes the quality search is able to move.
@@ -131,15 +93,15 @@ async function compressibleBytes(blob: Blob): Promise<number> {
 async function encodeWithinBudget(
   canvas: OffscreenCanvas,
   rung: number,
-  highFidelity: boolean,
+  encoder: Encoder,
 ): Promise<Blob> {
-  const budget = budgetFor(rung, highFidelity);
-  let quality = startingQuality(rung, highFidelity);
-  let blob = await canvas.convertToBlob({ type: 'image/webp', quality });
+  const budget = budgetFor(rung);
+  let quality = startingQuality(rung);
+  let blob = await encoder.encode(canvas, quality);
 
   while ((await compressibleBytes(blob)) > budget && quality > QUALITY_FLOOR) {
     quality = Math.max(QUALITY_FLOOR, quality - QUALITY_STEP);
-    blob = await canvas.convertToBlob({ type: 'image/webp', quality });
+    blob = await encoder.encode(canvas, quality);
   }
   return blob;
 }
@@ -179,8 +141,21 @@ function pickColorSpace(): PredefinedColorSpace {
  * both ways: the EXIF stripping the ladder gives away for free — GPS, camera serial — does
  * not happen here. Worth knowing before passing a camera original through.)
  */
-async function passthrough(request: CompressRequest): Promise<CompressResponse> {
+async function passthrough(
+  request: CompressRequest,
+  reason: PassthroughReason,
+): Promise<CompressResponse> {
   const { jobId, file, format } = request;
+  if (!format) {
+    // A TIFF is the one thing this cannot do. It uploads, but no browser renders it, so
+    // "keep the original" would store something the gallery can never show.
+    throw new Error(
+      reason === 'no-encoder'
+        ? 'This browser cannot convert TIFF. Open the site in Chrome to upload this one.'
+        : 'A TIFF has to be converted — no browser can display the original.',
+    );
+  }
+
   const bitmap = await createImageBitmap(file);
   const { width, height } = bitmap;
   bitmap.close();
@@ -195,14 +170,19 @@ async function passthrough(request: CompressRequest): Promise<CompressResponse> 
     variants: [{ rung: 0, blob: file, width, height }],
     colorSpace: 'source',
     passthrough: true,
+    passthroughReason: reason,
     format,
   };
 }
 
 async function ladder(request: CompressRequest): Promise<CompressResponse> {
-  const { jobId, file, highFidelity } = request;
-  const colorSpace = pickColorSpace();
+  const { jobId, file } = request;
+  const encoder = await pickEncoder();
+  // No encoder at all, not even the wasm one. Keep the original rather than convert it to
+  // something else: a WebP that arrives must stay a WebP, and JPEG has no alpha channel.
+  if (encoder.kind === 'none') return passthrough(request, 'no-encoder');
 
+  const colorSpace = pickColorSpace();
   // `colorSpaceConversion: 'none'` keeps the decoder from flattening a wide-gamut source
   // to sRGB before we have a chance to put it on a wide-gamut canvas.
   const bitmap = await createImageBitmap(file, { colorSpaceConversion: 'none' });
@@ -216,13 +196,25 @@ async function ladder(request: CompressRequest): Promise<CompressResponse> {
 
     const size = fit(bitmap.width, bitmap.height, rung);
     const canvas = downscale(bitmap, size.width, size.height, colorSpace);
-    const blob = await encodeWithinBudget(canvas, rung, highFidelity);
+    const blob = await encodeWithinBudget(canvas, rung, encoder);
 
     variants.push({ rung, blob, width: size.width, height: size.height });
     self.postMessage({ type: 'progress', jobId, rung } satisfies CompressResponse);
   }
 
   bitmap.close();
+
+  /*
+   * Compression must never make an image larger.
+   *
+   * The largest rung is what one visitor can be asked to download, so it is what the
+   * comparison has to be against. If the ladder cannot beat the file it started from, the
+   * ladder is not worth having — the original is smaller AND untouched. Only possible when
+   * the original is servable; a TIFF has to take the ladder whatever it weighs.
+   */
+  const largest = variants.reduce((top, variant) => (variant.rung >= top.rung ? variant : top));
+  if (request.format && largest.blob.size >= file.size) return passthrough(request, 'larger');
+
   return {
     type: 'done',
     jobId,
@@ -231,6 +223,7 @@ async function ladder(request: CompressRequest): Promise<CompressResponse> {
     variants,
     colorSpace,
     passthrough: false,
+    passthroughReason: null,
     format: 'webp',
   };
 }
@@ -239,7 +232,9 @@ self.onmessage = async (event: MessageEvent<CompressRequest>) => {
   const request = event.data;
   try {
     self.postMessage(
-      request.mode === 'passthrough' ? await passthrough(request) : await ladder(request),
+      request.mode === 'passthrough'
+        ? await passthrough(request, 'chosen')
+        : await ladder(request),
     );
   } catch (cause) {
     self.postMessage({
@@ -249,3 +244,15 @@ self.onmessage = async (event: MessageEvent<CompressRequest>) => {
     } satisfies CompressResponse);
   }
 };
+
+/*
+ * Probe as soon as the worker starts, and say what it found.
+ *
+ * Unsolicited rather than request/response: the tray needs to know whether compression is
+ * even possible before he drops anything, and on Safari this also warms the ~385KB wasm
+ * download while he is still choosing files. It is only a LABEL — every real decision is
+ * made here in the worker, so a slow probe can never race a dropped file into the wrong path.
+ */
+void pickEncoder().then((encoder) => {
+  self.postMessage({ type: 'capabilities', encoder: encoder.kind } satisfies CompressResponse);
+});

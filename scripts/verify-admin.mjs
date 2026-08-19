@@ -162,17 +162,27 @@ async function main() {
       [...document.querySelectorAll('.tray-item')].map((item) => ({
         label: item.querySelector('.tray-fidelity')?.textContent?.trim() ?? '',
         checked: item.querySelector('.tray-fidelity input')?.checked ?? false,
+        disabled: item.querySelector('.tray-fidelity input')?.disabled ?? false,
         untouched: item.querySelector('.tray-untouched') !== null,
       })),
     );
+    // ONE checkbox, one meaning, on EVERY row — the lossless escape hatch is always
+    // reachable. It used to appear only under 150KB, so a 5MB photograph could not be kept
+    // untouched at all; over the threshold the row offered "High fidelity" instead, which
+    // was a different control wearing the same slot.
     check(
-      boxes.slice(0, 2).every((b) => b.label === 'High fidelity' && !b.checked),
-      'large files still offer "High fidelity", unchecked',
+      boxes.every((b) => b.label.startsWith('No compression')),
+      'every row offers "No compression", whatever the size',
+      JSON.stringify(boxes.map((b) => b.label)),
+    );
+    check(
+      boxes.slice(0, 2).every((b) => !b.checked && !b.disabled),
+      'over 150KB it starts UNCHECKED — compression is automatic',
       JSON.stringify(boxes.slice(0, 2)),
     );
     check(
-      boxes.slice(2).every((b) => b.label === 'No compression' && b.checked),
-      'files under 150KB offer "No compression", pre-CHECKED',
+      boxes.slice(2).every((b) => b.checked && !b.disabled),
+      'under 150KB it starts CHECKED, where re-encoding would only cost quality',
       JSON.stringify(boxes.slice(2)),
     );
     check(
@@ -263,18 +273,41 @@ async function main() {
       'files can be reordered in the tray, BEFORE publishing',
     );
 
+    // The escape hatch, on a file far over the threshold: checking it must give back the
+    // ORIGINAL bytes, not a smaller re-encode. This is the whole point of the control — a
+    // lossless path that is always available, at any size.
+    // Wait for the row to LEAVE ready and come back. Waiting only for a count is a race:
+    // the re-encode has not started yet at the moment the box is ticked, so the first read
+    // can land on the previous result — or on a row mid-flight with no size in it at all.
+    const settle = async () => {
+      await page.waitForSelector('.tray-item.is-compressing', { timeout: 30_000 }).catch(() => {});
+      await page.waitForFunction(
+        () => document.querySelectorAll('.tray-item.is-ready').length === 5,
+        undefined,
+        { timeout: 120_000 },
+      );
+    };
+
     const sizeBefore = await page.textContent('.tray-item:nth-child(1) .tray-after');
     await page.check('.tray-item:nth-child(1) .tray-fidelity input');
-    await page.waitForFunction(
-      () => document.querySelectorAll('.tray-item.is-ready').length === 4,
-      undefined,
-      { timeout: 120_000 },
-    );
-    const sizeAfter = await page.textContent('.tray-item:nth-child(1) .tray-after');
+    await settle();
+    const kept = await page.evaluate(() => {
+      const row = document.querySelector('.tray-item:nth-child(1)');
+      return {
+        after: row?.querySelector('.tray-after')?.textContent ?? '',
+        untouched: row?.querySelector('.tray-untouched')?.textContent ?? '',
+      };
+    });
     check(
-      sizeBefore !== sizeAfter,
-      `high fidelity RE-ENCODES rather than doing nothing (${sizeBefore} → ${sizeAfter})`,
+      kept.untouched.startsWith('untouched') && kept.after !== sizeBefore,
+      `"No compression" keeps a large original untouched (${sizeBefore} → ${kept.after})`,
+      JSON.stringify(kept),
     );
+
+    // Put it back, so the rows published below are the compressed ones the later checks
+    // (maxRung, srcset, colour round-trip) are written against.
+    await page.uncheck('.tray-item:nth-child(1) .tray-fidelity input');
+    await settle();
 
     // ── Publish ──────────────────────────────────────────────────────────────
     console.log('\nPublish');

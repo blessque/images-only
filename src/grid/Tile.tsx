@@ -49,8 +49,6 @@ export function Tile({ solved, base, eager, index }: TileProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { renderTileOverlay } = useAdminHooks();
   const { item, width, height } = solved;
-  // Null for a passthrough image — one object, so `src` alone is the whole story.
-  const srcSet = srcSetFor(base, item);
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -74,6 +72,8 @@ export function Tile({ solved, base, eager, index }: TileProps) {
   }
 
   const retrySuffix = attempt > 0 ? `?r=${attempt}` : '';
+  // Null for a passthrough image — one object, so `src` alone is the whole story.
+  const srcSet = srcSetFor(base, item, retrySuffix);
 
   return (
     <div className="tile" style={{ width: `${width}px`, height: `${height}px` }}>
@@ -86,9 +86,7 @@ export function Tile({ solved, base, eager, index }: TileProps) {
           src={`${fallbackSrc(base, item)}${retrySuffix}`}
           {...(srcSet
             ? {
-                srcSet: retrySuffix
-                  ? srcSet.replace(/\.webp /g, `.webp${retrySuffix} `)
-                  : srcSet,
+                srcSet,
                 /*
                  * The exact solved CSS width, not a guessed media query. We know it, and
                  * a guess here is the standard way responsive images silently fetch the

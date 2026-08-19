@@ -5,6 +5,7 @@ import type { ImageItem } from './types';
 export const PRODUCTION_BASE = '/img';
 export const FIXTURE_BASE = '/fixtures';
 
+/** A ladder rung is always webp — a browser that cannot encode WebP skips the ladder. */
 export function variantUrl(base: string, id: string, rung: number): string {
   return `${base}/${id}/${rung}.webp`;
 }
@@ -43,11 +44,18 @@ export function availableRungs(item: ImageItem): number[] {
 /**
  * Returns null for a passthrough image: there is exactly one object, so `src` alone is
  * correct and a one-entry srcset would only invite a wrong `sizes` to matter.
+ *
+ * `suffix` is the retry cache-buster, and it belongs here rather than in a regex over the
+ * finished string: `Tile.tsx` used to rewrite `/\.webp /g`, which quietly stopped matching
+ * anything the moment a ladder could be `.jpg`.
  */
-export function srcSetFor(base: string, item: ImageItem): string | null {
+export function srcSetFor(base: string, item: ImageItem, suffix = ''): string | null {
   if (item.passthrough) return null;
   return availableRungs(item)
-    .map((rung) => `${variantUrl(base, item.id, rung)} ${variantPixelWidth(rung, item.aspect)}w`)
+    .map(
+      (rung) =>
+        `${variantUrl(base, item.id, rung)}${suffix} ${variantPixelWidth(rung, item.aspect)}w`,
+    )
     .join(', ');
 }
 

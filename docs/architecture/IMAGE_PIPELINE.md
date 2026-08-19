@@ -89,6 +89,22 @@ re-encode), not a fixed magic number: a flat photo and a densely-textured one ne
 quality to hit the same bytes, and a fixed number over-compresses one and wastes bytes on
 the other.
 
+**The ladder is ALWAYS WebP, by one of two encoders — or it does not run.** `convertToBlob`'s
+`type` is a request: a browser that cannot honour it returns `image/png` and says nothing.
+Safari cannot encode WebP from a canvas, which shipped 1.3MB "variants" of 160KB photographs
+with `quality` silently ignored. So the worker probes once — right type, *and* quality that
+actually moves bytes — and resolves in this order:
+
+1. the browser's own encoder;
+2. **libwebp in wasm** (`@jsquash/webp`), lazily imported, only where the first fails. It is
+   the same library Chrome's canvas encoder uses, and measures within 0.2% of it. It writes
+   no ICC profile, so it is fed `getImageData(…, {colorSpace:'srgb'})` — correct colour,
+   narrower gamut, rather than P3 values in an untagged file;
+3. neither — then there is **no ladder**, and the original is kept untouched.
+
+Never a different format. A WebP that arrives stays a WebP, and JPEG has no alpha channel, so
+converting would silently destroy transparency. See TUNING_LOG.md, iteration 18.
+
 **The search measures only the bytes it can move.** A lossy WebP carrying transparency holds
 a *lossless* alpha plane (the `ALPH` chunk) whose size does not change by one byte between
 quality 0.92 and the floor — measured. Counting it against the budget made the search spend
@@ -150,8 +166,11 @@ What is built instead:
 
 - **Honest before/after byte counts and a side-by-side preview at upload**, so he can
   verify with his own eyes that nothing was lost. Trust earned by evidence, not by a switch.
-- **A per-image "high fidelity" escape hatch** that raises that one image's budget, for the
-  rare photo with fine grain or a subtle gradient that genuinely suffers.
+- **A per-image "No compression" escape hatch** — the source bytes untouched, at any size,
+  for the photograph with fine grain or a subtle gradient that genuinely suffers. It starts
+  checked under 150KB and unchecked over it, so compression is automatic where it pays.
+  (It replaced a "high fidelity" box that only raised the budget; this is the complete
+  version of the same idea. See TUNING_LOG.md, iteration 18.)
 
 Local, reversible, per-image — not global and permanent.
 

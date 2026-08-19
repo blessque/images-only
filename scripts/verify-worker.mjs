@@ -27,9 +27,14 @@ function check(condition, message, detail = '') {
   }
 }
 
-const id = [...crypto.getRandomValues(new Uint8Array(8))]
-  .map((b) => b.toString(16).padStart(2, '0'))
-  .join('');
+const newId = () =>
+  [...crypto.getRandomValues(new Uint8Array(8))]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+
+const id = newId();
+/** A second image, for the JPEG ladder a browser without a WebP encoder produces. */
+const jpgId = newId();
 
 async function waitForServer(timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
@@ -161,6 +166,44 @@ async function main() {
     check(
       (await served.arrayBuffer()).byteLength === webp.byteLength,
       'the bytes round-trip unchanged',
+    );
+
+    // ── A ladder is always webp ──────────────────────────────────────────────
+    // Safari cannot encode WebP from a canvas and `convertToBlob` does not say so — it
+    // returns PNG, which shipped 1.3MB "variants" of 160KB photographs. The answer is a wasm
+    // encoder, and failing that KEEPING THE ORIGINAL as a passthrough. What must never
+    // happen is a ladder in some other format: that would cost transparency, and it would
+    // put bytes behind a key whose extension disagrees with them.
+    console.log('\nThe ladder is webp, and only webp');
+    const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 0, 0, 0, 0]);
+    for (const extension of ['jpg', 'png', 'gif']) {
+      const rejected = await fetch(`${BASE}/api/upload/${jpgId}/400.${extension}`, {
+        method: 'PUT',
+        headers: auth,
+        body: jpegBytes,
+      });
+      check(rejected.status === 400, `a .${extension} ladder rung is rejected (${rejected.status})`);
+    }
+
+    const jpgLadder = await fetch(`${BASE}/api/images`, {
+      method: 'POST',
+      headers: { ...auth, 'content-type': 'application/json' },
+      body: JSON.stringify({ id: jpgId, aspect: 1, sizeClass: 'tight', alt: '', maxRung: 400, passthrough: false, format: 'jpg' }),
+    });
+    check(jpgLadder.status === 400, `a ladder image cannot declare a non-webp format (${jpgLadder.status})`);
+
+    // A PASSTHROUGH may be any format we can serve — that is the whole escape hatch.
+    const original = await fetch(`${BASE}/api/upload/${jpgId}/full.jpg`, {
+      method: 'PUT',
+      headers: auth,
+      body: jpegBytes,
+    });
+    check(original.ok, `but an untouched ORIGINAL may be a jpg (${original.status})`);
+    const originalServed = await fetch(`${BASE}/img/${jpgId}/full.jpg`);
+    check(
+      originalServed.headers.get('content-type') === 'image/jpeg',
+      'and serves under its own content type',
+      `got ${originalServed.headers.get('content-type')}`,
     );
 
     // Alt text is user-controlled and lands in a <script> block. This is the injection.

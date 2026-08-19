@@ -1,16 +1,24 @@
 import { useState } from 'react';
 import { SIZE_CLASSES, type SizeClass } from '@/lib/types';
-import { canPassThrough, formatBytes, savedLabel, type StagedFile } from './staging';
+import {
+  canKeepOriginal,
+  formatBytes,
+  originalTitle,
+  savedLabel,
+  untouchedLabel,
+  type StagedFile,
+} from './staging';
 import { DAILY_WRITE_BUDGET } from './compressParams';
+import type { EncoderKind } from './encoder';
 
 interface UploadTrayProps {
   staged: StagedFile[];
   publishing: boolean;
   onChange: (jobId: string, patch: Partial<StagedFile>) => void;
-  /** Re-encodes that one file — the checkbox appears after the first pass has already run. */
-  onHighFidelity: (jobId: string, value: boolean) => void;
-  /** Small files only: upload the source bytes untouched, or run the ladder anyway. */
+  /** Upload the source bytes untouched, or run the ladder. Offered at every size. */
   onNoCompression: (jobId: string, value: boolean) => void;
+  /** What the browser can encode. Null while the worker is still probing. */
+  encoderKind: EncoderKind | null;
   /** The tray's order becomes the gallery's order, so arranging here saves shuffling later. */
   onMove: (jobId: string, direction: -1 | 1) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -23,8 +31,8 @@ export function UploadTray({
   staged,
   publishing,
   onChange,
-  onHighFidelity,
   onNoCompression,
+  encoderKind,
   onMove,
   onReorder,
   onRemove,
@@ -40,6 +48,11 @@ export function UploadTray({
     .filter((file) => file.status === 'ready')
     .reduce((total, file) => total + file.variants.length, 0);
   const overBudget = writes > DAILY_WRITE_BUDGET;
+
+  // Nothing here can compress. Said once, in grey, so a row of disabled checkboxes is never
+  // unexplained — an unexplained greyed-out control is how a non-technical owner concludes
+  // the site is broken.
+  const cannotCompress = encoderKind === 'none';
 
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
@@ -74,6 +87,13 @@ export function UploadTray({
           This batch is {writes} uploads and the free storage tier allows{' '}
           {DAILY_WRITE_BUDGET.toLocaleString('en-US')} a day. Publish some of it tomorrow, or
           the last images will fail with no explanation.
+        </p>
+      ) : null}
+
+      {cannotCompress ? (
+        <p className="tray-fallback">
+          This browser cannot make WebP, so nothing can be compressed here — every photograph
+          is uploaded exactly as it is. Uploading in Chrome produces much smaller files.
         </p>
       ) : null}
 
@@ -168,39 +188,36 @@ export function UploadTray({
                 </div>
 
                 {/*
-                  One checkbox, two meanings — and both are "compress this less", so the
-                  direction stays consistent. It is per image and reversible; a GLOBAL
-                  skip-compression switch stays rejected, because a non-technical user
+                  ONE checkbox, one meaning, on every row: is this photograph being touched
+                  at all? Checked, the original bytes go up exactly as they are, at any size
+                  — pixels, colour profile, EXIF and transparency all intact. It replaced
+                  "High fidelity", which raised quality for one image; this is the complete
+                  version of the same idea and needs no explaining.
+
+                  A GLOBAL skip-compression switch stays rejected: a non-technical owner
                   turns that off "to be safe" and ships a 200MB page.
                   See docs/decisions/TUNING_LOG.md.
                 */}
-                {canPassThrough(file.file) ? (
-                  <label
-                    className="tray-fidelity"
-                    title="Uploads the original bytes untouched — nothing is re-encoded"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={file.noCompression}
-                      onChange={(event) => onNoCompression(file.jobId, event.target.checked)}
-                      disabled={publishing || file.status === 'compressing'}
-                    />
-                    No compression
-                  </label>
-                ) : (
-                  <label
-                    className="tray-fidelity"
-                    title="Re-encodes this image at a higher quality and a larger byte budget"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={file.highFidelity}
-                      onChange={(event) => onHighFidelity(file.jobId, event.target.checked)}
-                      disabled={publishing || file.status === 'compressing'}
-                    />
-                    High fidelity
-                  </label>
-                )}
+                <label className="tray-fidelity" title={originalTitle(file, !cannotCompress)}>
+                  <input
+                    type="checkbox"
+                    checked={file.noCompression}
+                    onChange={(event) => onNoCompression(file.jobId, event.target.checked)}
+                    disabled={
+                      publishing ||
+                      file.status === 'compressing' ||
+                      // Forced, either way. Nothing here can compress, or nothing here can
+                      // serve this format untouched — a TIFF has to be converted.
+                      cannotCompress ||
+                      !canKeepOriginal(file.file)
+                    }
+                  />
+                  No compression
+                  {cannotCompress ? <span className="tray-cause"> — unavailable here</span> : null}
+                  {!cannotCompress && !canKeepOriginal(file.file) ? (
+                    <span className="tray-cause"> — {file.format || 'this format'} must convert</span>
+                  ) : null}
+                </label>
               </div>
             </div>
 
@@ -208,19 +225,17 @@ export function UploadTray({
             <div className="tray-size">
               {file.status === 'compressing' ? (
                 <span className="tray-progress">
-                  {file.noCompression
-                    ? 'reading…'
-                    : `${file.highFidelity ? 're-encoding ' : ''}${
-                        file.rung ? `${file.rung}px…` : 'reading…'
-                      }`}
+                  {file.noCompression || !file.rung ? 'reading…' : `${file.rung}px…`}
                 </span>
               ) : file.status === 'error' ? (
                 <span className="tray-error">{file.error}</span>
               ) : file.noCompression && file.compressedBytes > 0 ? (
-                // Nothing was re-encoded, so a before/after would be theatre.
+                // Nothing was re-encoded, so a before/after would be theatre. But if HE did
+                // not choose this, say who did — an unexplained "untouched" on a 4MB file
+                // looks like the compression silently failed, which is what it used to be.
                 <>
                   <span className="tray-after">{formatBytes(file.sourceBytes)}</span>
-                  <span className="tray-untouched">untouched</span>
+                  <span className="tray-untouched">{untouchedLabel(file)}</span>
                 </>
               ) : file.compressedBytes > 0 ? (
                 <>

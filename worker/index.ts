@@ -41,7 +41,16 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
 const utf8 = new TextEncoder();
 const VALID_CLASSES = new Set<string>(['solo', 'wide', 'tight']);
 const VALID_RUNGS = new Set<number>(VARIANT_WIDTHS);
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+/**
+ * Sized to the STORE, not to a guess.
+ *
+ * Workers KV caps a single value at 25 MiB, so anything larger cannot be stored whatever we
+ * do here. It was 8 MB while the ladder always ran and every object was a variant; now that
+ * "No compression" is offered at any size, an untouched camera original is a normal thing to
+ * upload and 8 MB rejected them for no reason a person could see. 24 MB leaves room for the
+ * metadata KV puts around a value.
+ */
+const MAX_UPLOAD_BYTES = 24 * 1024 * 1024;
 
 /**
  * Formats a passthrough object may be stored as, and the content type each is served with.
@@ -123,6 +132,9 @@ async function serveShell(request: Request, env: Env): Promise<Response> {
 
 /** Resolves an image path to its R2 key and content type, or null if it is not one. */
 function resolveImagePath(pathname: string): { key: string; contentType: string } | null {
+  // A ladder is ALWAYS webp. Where a browser cannot encode WebP the ladder does not run at
+  // all and the original is kept instead — it is never converted to some other format, so
+  // there is exactly one extension a rung can have. See docs/decisions/TUNING_LOG.md.
   const ladder = /^\/img\/([a-f0-9]{16})\/(\d+)\.webp$/.exec(pathname);
   if (ladder) {
     const [, id, rung] = ladder;
@@ -267,7 +279,12 @@ async function handleUpload(request: Request, env: Env, url: URL): Promise<Respo
   // header is a claim, and this is the thing the limit is supposed to be about.
   const bytes = await request.arrayBuffer();
   if (bytes.byteLength === 0) return json({ error: 'Empty body' }, 400);
-  if (bytes.byteLength > MAX_UPLOAD_BYTES) return json({ error: 'Too large' }, 413);
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    // Named, and with the way out: the person who hits this is uploading an untouched
+    // original, and "Too large" alone does not tell him that unchecking one box fixes it.
+    const limit = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
+    return json({ error: `Larger than the ${limit}MB storage limit — compress this one` }, 413);
+  }
 
   await putObject(env, resolved.key, bytes, resolved.contentType, IMMUTABLE);
   return json({ ok: true });
@@ -301,7 +318,7 @@ async function handleCreate(request: Request, env: Env): Promise<Response> {
   // advertise a key that was never written.
   const passthrough = body.passthrough === true;
   const format = typeof body.format === 'string' ? body.format : 'webp';
-  // A passthrough may be any format we can serve; a ladder image is always webp.
+  // A passthrough may be any format we can serve; a ladder is always webp.
   const formatOk = passthrough ? format in PASSTHROUGH_TYPES : format === 'webp';
   // maxRung is meaningless for a passthrough (there is no ladder), so it is not required.
   const maxRung =

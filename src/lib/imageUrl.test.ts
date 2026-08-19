@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availableRungs, fallbackSrc, srcSetFor, variantPixelWidth } from './imageUrl';
+import { availableRungs, fallbackSrc, srcSetFor, variantPixelWidth, variantUrl } from './imageUrl';
 import { VARIANT_WIDTHS, type ImageItem } from './types';
 
 function item(over: Partial<ImageItem> = {}): ImageItem {
@@ -64,6 +64,40 @@ describe('passthrough images bypass the ladder entirely', () => {
     expect(fallbackSrc('/img', item({ passthrough: true, format: 'jpg' }))).toBe(
       '/img/a1b2c3d4e5f60718/full.jpg',
     );
+  });
+});
+
+describe('a ladder rung is always webp', () => {
+  /**
+   * Safari cannot encode WebP from a canvas and `convertToBlob` does not say so — it returns
+   * PNG, which is how a 160KB photograph became a 1.3MB "variant". The answer is a wasm
+   * encoder, and failing that, keeping the ORIGINAL: the ladder is never converted to some
+   * other format, because that would cost transparency. So a rung has exactly one extension,
+   * and `item.format` describes the passthrough object only.
+   */
+  it('ignores the image’s passthrough format when building a ladder key', () => {
+    expect(variantUrl('/img', 'a1b2c3d4e5f60718', 800)).toBe('/img/a1b2c3d4e5f60718/800.webp');
+    expect(srcSetFor('/img', item({ maxRung: 400, format: 'png' }))).toContain('400.webp');
+  });
+});
+
+describe('the retry cache-buster', () => {
+  /**
+   * A just-published photograph can 404 for ~60s while KV propagates, and a browser may cache
+   * that 404 — so a retry needs a new URL. This used to be a `/\.webp /g` replace inside
+   * Tile.tsx, which silently did nothing once a ladder could be `.jpg`.
+   */
+  it('appends the suffix to every entry, whatever the extension', () => {
+    expect(srcSetFor('/img', item({ maxRung: 800 }), '?r=1')).toBe(
+      '/img/a1b2c3d4e5f60718/400.webp?r=1 400w, /img/a1b2c3d4e5f60718/800.webp?r=1 800w',
+    );
+    expect(srcSetFor('/img', item({ maxRung: 400 }), '?r=2')).toBe(
+      '/img/a1b2c3d4e5f60718/400.webp?r=2 400w',
+    );
+  });
+
+  it('leaves the first request a clean immutable URL', () => {
+    expect(srcSetFor('/img', item({ maxRung: 400 }))).not.toContain('?');
   });
 });
 

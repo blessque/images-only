@@ -49,6 +49,7 @@
     "build:php": "node scripts/build-php.mjs"
   },
   "dependencies": {
+    "@jsquash/webp": "^1.5.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

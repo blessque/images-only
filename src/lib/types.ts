@@ -37,7 +37,13 @@ export interface ImageItem {
    * files small enough that compressing them costs quality and buys nothing.
    */
   passthrough: boolean;
-  /** Extension the bytes are stored under: 'webp' for the ladder, the source's own otherwise. */
+  /**
+   * Extension the bytes are stored under: 'webp' for the ladder, the source's own otherwise.
+   *
+   * A ladder is ALWAYS webp. A browser that cannot encode WebP does not fall back to some
+   * other format — it keeps the original instead, as a passthrough, because converting would
+   * cost transparency. See docs/decisions/TUNING_LOG.md.
+   */
   format: string;
 }
 

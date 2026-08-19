@@ -1,5 +1,11 @@
-import { useEffect, useRef } from 'react';
-import type { CompressRequest, CompressResponse, VariantResult } from './compressWorker';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  CompressRequest,
+  CompressResponse,
+  PassthroughReason,
+  VariantResult,
+} from './compressWorker';
+import type { EncoderKind } from './encoder';
 
 export interface CompressOutcome {
   aspect: number;
@@ -7,6 +13,7 @@ export interface CompressOutcome {
   variants: VariantResult[];
   colorSpace: string;
   passthrough: boolean;
+  passthroughReason: PassthroughReason | null;
   format: string;
 }
 
@@ -27,6 +34,9 @@ type Pending = {
 export function useCompressor() {
   const workerRef = useRef<Worker | null>(null);
   const pendingRef = useRef(new Map<string, Pending>());
+  // Null until the worker has probed. Only a LABEL for the tray — the worker decides what
+  // actually happens to each file, so this can never race a dropped file into the wrong path.
+  const [encoderKind, setEncoderKind] = useState<EncoderKind | null>(null);
 
   useEffect(() => {
     const worker = new Worker(new URL('./compressWorker.ts', import.meta.url), {
@@ -35,6 +45,13 @@ export function useCompressor() {
 
     worker.onmessage = (event: MessageEvent<CompressResponse>) => {
       const message = event.data;
+      // Unsolicited, and belongs to no job: the worker reports what it can encode as soon
+      // as it has probed, so the tray can label the checkbox before anything is dropped.
+      if (message.type === 'capabilities') {
+        setEncoderKind(message.encoder);
+        return;
+      }
+
       const pending = pendingRef.current.get(message.jobId);
       if (!pending) return;
 
@@ -50,6 +67,7 @@ export function useCompressor() {
           variants: message.variants,
           colorSpace: message.colorSpace,
           passthrough: message.passthrough,
+          passthroughReason: message.passthroughReason,
           format: message.format,
         });
       } else {
@@ -72,10 +90,10 @@ export function useCompressor() {
     };
   }, []);
 
-  return function compress(
+  function compress(
     jobId: string,
     file: File,
-    options: { mode: 'ladder' | 'passthrough'; highFidelity: boolean; format: string },
+    options: { mode: 'ladder' | 'passthrough'; format: string },
     onProgress: (rung: number) => void,
   ): Promise<CompressOutcome> {
     const worker = workerRef.current;
@@ -85,5 +103,7 @@ export function useCompressor() {
       pendingRef.current.set(jobId, { resolve, reject, onProgress });
       worker.postMessage({ jobId, file, ...options } satisfies CompressRequest);
     });
-  };
+  }
+
+  return { compress, encoderKind };
 }

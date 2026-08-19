@@ -9,7 +9,7 @@ import { TileControls } from './TileControls';
 import { useCompressor } from './useCompressor';
 import {
   altFromFilename,
-  canPassThrough,
+  keepOriginalByDefault,
   deliveredBytes,
   isAcceptedImage,
   type StagedFile,
@@ -43,7 +43,7 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
   const [downloading, setDownloading] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const compress = useCompressor();
+  const { compress, encoderKind } = useCompressor();
 
   // Mirrors `staged` so callbacks can read the current list without taking it as a
   // dependency — otherwise every keystroke in an alt field rebuilds them.
@@ -124,16 +124,17 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
   }, []);
 
   const runCompression = useCallback(
-    async (jobId: string, file: File, options: { highFidelity: boolean; noCompression: boolean }) => {
+    async (jobId: string, file: File, noCompression: boolean) => {
       patchStaged(jobId, { status: 'compressing', rung: null, error: undefined });
       try {
         const outcome = await compress(
           jobId,
           file,
           {
-            mode: options.noCompression ? 'passthrough' : 'ladder',
-            highFidelity: options.highFidelity,
-            format: formatFor(file) ?? 'webp',
+            mode: noCompression ? 'passthrough' : 'ladder',
+            // '' when nothing servable could be stored — a TIFF has no untouched form the
+            // gallery could ever display, so the worker refuses rather than storing one.
+            format: formatFor(file) ?? '',
           },
           (rung) => patchStaged(jobId, { rung }),
         );
@@ -146,6 +147,10 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           // one source file reported every honest compression as a 2-5x gain in weight.
           compressedBytes: deliveredBytes(outcome.variants),
           format: outcome.format,
+          // The worker has the last word: it keeps the original when the ladder came out no
+          // smaller, or when this browser has no WebP encoder at all. Reflect what it did.
+          noCompression: outcome.passthrough,
+          passthroughReason: outcome.passthroughReason,
           rung: null,
         });
       } catch (cause) {
@@ -171,10 +176,10 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
         aspect: 1,
         sizeClass: 'tight',
         alt: altFromFilename(file.name),
-        highFidelity: false,
         // Pre-checked for anything already small enough that re-encoding it would only
-        // cost quality. The user can uncheck it to run the ladder anyway.
-        noCompression: canPassThrough(file),
+        // cost quality. He can check or uncheck it at any size.
+        noCompression: keepOriginalByDefault(file),
+        passthroughReason: null,
         format: formatFor(file) ?? 'webp',
         variants: [],
         sourceBytes: file.size,
@@ -186,48 +191,27 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
       // Sequential on purpose: twenty concurrent decodes of 10MB photographs is how a
       // responsive-looking tray runs the machine out of memory.
       for (const entry of entries) {
-        await runCompression(entry.jobId, entry.file, {
-          highFidelity: entry.highFidelity,
-          noCompression: entry.noCompression,
-        });
+        await runCompression(entry.jobId, entry.file, entry.noCompression);
       }
     },
     [runCompression],
   );
 
   /**
-   * High fidelity RE-ENCODES that one file.
+   * "No compression" — upload the source bytes untouched, at any size.
    *
-   * The checkbox only appears after the first pass has already run, so toggling it has to
-   * redo the work — otherwise it is a control that visibly does nothing, which is worse
-   * than not offering it. Still per-image and reversible; never a global switch.
-   */
-  const setHighFidelity = useCallback(
-    (jobId: string, highFidelity: boolean) => {
-      const entry = stagedRef.current.find((file) => file.jobId === jobId);
-      if (!entry) return;
-      patchStaged(jobId, { highFidelity });
-      void runCompression(jobId, entry.file, { highFidelity, noCompression: false });
-    },
-    [patchStaged, runCompression],
-  );
-
-  /**
-   * "No compression" — upload the source bytes untouched.
-   *
-   * Unchecking it runs the normal ladder, which is the only reason it is a checkbox rather
-   * than an automatic rule: a small file that IS worth re-encoding (a 120KB PNG that would
-   * halve as WebP) stays the user's call.
+   * The one control on a row, and the whole lossless escape hatch: checked, not a pixel
+   * changes and the ICC profile, the EXIF and any transparency survive exactly as they are.
+   * Unchecked, the ladder runs. It replaced "High fidelity", which raised quality for one
+   * image — this is the complete version of that idea, and simpler to explain to someone who
+   * only wants to know whether his photograph is being touched.
    */
   const setNoCompression = useCallback(
     (jobId: string, noCompression: boolean) => {
       const entry = stagedRef.current.find((file) => file.jobId === jobId);
       if (!entry) return;
-      patchStaged(jobId, { noCompression });
-      void runCompression(jobId, entry.file, {
-        highFidelity: entry.highFidelity,
-        noCompression,
-      });
+      patchStaged(jobId, { noCompression, passthroughReason: null });
+      void runCompression(jobId, entry.file, noCompression);
     },
     [patchStaged, runCompression],
   );
@@ -511,8 +495,8 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           staged={staged}
           publishing={publishing}
           onChange={patchStaged}
-          onHighFidelity={setHighFidelity}
           onNoCompression={setNoCompression}
+          encoderKind={encoderKind}
           onMove={moveStaged}
           onReorder={reorderStaged}
           onRemove={(jobId) => {

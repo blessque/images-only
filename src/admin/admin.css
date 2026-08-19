@@ -227,6 +227,12 @@
   cursor: pointer;
 }
 
+/* The reason a checkbox is disabled, inline in its own label. A greyed-out control with no
+   stated cause is how a non-technical owner concludes the site is broken. */
+.tray-cause {
+  color: #6a6a6a;
+}
+
 .tray-size {
   flex: 0 0 auto;
   display: flex;
@@ -470,6 +476,15 @@
 
 /* Daily write-budget warning. Advice, not a block — splitting a batch across two days
    costs nothing, and the decision is his. */
+/* Informational, not a warning — grey, no background. The write-budget note below is amber
+   because it can cost him a failed batch; this one only explains a file size. */
+.tray-fallback {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--admin-line);
+  color: var(--grey-text);
+}
+
 .tray-budget {
   margin: 0;
   padding: 8px 12px;

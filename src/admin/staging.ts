@@ -1,5 +1,5 @@
 import type { SizeClass } from '@/lib/types';
-import type { VariantResult } from './compressWorker';
+import type { PassthroughReason, VariantResult } from './compressWorker';
 import { PASSTHROUGH_MAX_BYTES, formatFor } from './compressParams';
 
 export type StagedStatus = 'queued' | 'compressing' | 'ready' | 'uploading' | 'done' | 'error';
@@ -13,9 +13,10 @@ export interface StagedFile {
   aspect: number;
   sizeClass: SizeClass;
   alt: string;
-  highFidelity: boolean;
-  /** Upload the source bytes untouched. Auto-checked for small files. */
+  /** Upload the source bytes untouched. Auto-checked under 150KB, available at any size. */
   noCompression: boolean;
+  /** Set when the worker chose passthrough for him — see `PassthroughReason`. */
+  passthroughReason: PassthroughReason | null;
   /** Extension the bytes go to R2 under — the source's own when passing through. */
   format: string;
   variants: VariantResult[];
@@ -75,6 +76,35 @@ export function deliveredBytes(variants: VariantResult[]): number {
 }
 
 /**
+ * What the "untouched" pill says, which depends on WHO decided.
+ *
+ * He chose it: nothing more to explain. The worker chose it: say why, because an unexplained
+ * "untouched" on a 4MB photograph looks exactly like compression having silently failed —
+ * which, for one iteration, is precisely what it was.
+ */
+export function untouchedLabel(file: StagedFile): string {
+  switch (file.passthroughReason) {
+    case 'larger':
+      return 'untouched — already smaller';
+    case 'no-encoder':
+      return 'untouched — cannot compress here';
+    default:
+      return 'untouched';
+  }
+}
+
+/** The checkbox's tooltip, which has to explain a DISABLED box as well as a live one. */
+export function originalTitle(file: StagedFile, canCompress: boolean): string {
+  if (!canCompress) {
+    return 'This browser cannot make WebP, so nothing can be compressed here';
+  }
+  if (!canKeepOriginal(file.file)) {
+    return 'No browser can display this format, so it has to be converted';
+  }
+  return 'Uploads the original bytes untouched — nothing is re-encoded';
+}
+
+/**
  * The saving, signed honestly.
  *
  * The sign used to be a '−' hardcoded in the markup, so the growth this function now has to
@@ -88,13 +118,24 @@ export function savedLabel(sourceBytes: number, afterBytes: number): string {
 }
 
 /**
- * Small enough that compressing it costs quality and buys nothing — so the checkbox on
- * this row becomes "No compression", pre-checked. Also requires a format we can serve
- * back verbatim: a TIFF has to go through the ladder whatever its size, because no
- * browser will render the original.
+ * Whether the ORIGINAL bytes could be served back verbatim.
+ *
+ * Any size — keeping the original is the lossless escape hatch and it is always offered.
+ * The one exception is a format no browser renders: a TIFF has to go through the ladder
+ * whatever it weighs, because the original would be an image the gallery can never show.
  */
-export function canPassThrough(file: File): boolean {
-  return file.size < PASSTHROUGH_MAX_BYTES && formatFor(file) !== null;
+export function canKeepOriginal(file: File): boolean {
+  return formatFor(file) !== null;
+}
+
+/**
+ * Whether "No compression" starts CHECKED. The default only — he can change either way.
+ *
+ * Under the threshold, re-encoding costs quality and buys nothing. Over it, compression is
+ * automatic, because a non-technical owner who has to remember to switch it on will not.
+ */
+export function keepOriginalByDefault(file: File): boolean {
+  return file.size < PASSTHROUGH_MAX_BYTES && canKeepOriginal(file);
 }
 
 export const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/tiff'];

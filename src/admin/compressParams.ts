@@ -8,39 +8,36 @@
 import { VARIANT_WIDTHS } from '@/lib/types';
 
 /**
- * Below this, the source is uploaded UNTOUCHED — no ladder, no re-encode.
+ * Below this the "No compression" box starts CHECKED — the source is uploaded untouched.
  *
  * Re-encoding an already-compressed 52KB WebP costs quality and buys nothing, and the
  * canvas API has no lossless WebP mode (`quality: 1` is still lossy), so passing the
  * original bytes through is the only way to lose nothing at all.
  *
- * Note this is a BYTE threshold, as specified. A small file can still be large in
- * dimensions — a flat 4000px PNG can sit under 150KB — and passthrough serves those at
- * full size. Transfer cost is unaffected (that is what the threshold measures); only
- * decode cost is, and lazy loading keeps that off the critical path. Unchecking the box
- * runs the normal ladder if a particular image wants it.
+ * This decides the DEFAULT only. The box is on every row, at every size, so a 5MB original
+ * can be kept untouched by choice — that is the lossless escape hatch, and it is always
+ * available. Note it is a BYTE threshold, as specified: a small file can still be large in
+ * dimensions (a flat 4000px PNG can sit under 150KB), and that is fine — transfer cost is
+ * what the threshold measures, and lazy loading keeps decode cost off the critical path.
  */
 export const PASSTHROUGH_MAX_BYTES = 150_000;
 
 /** Byte budget per rung. The top rung is the de-facto master, so it gets more room. */
-export function budgetFor(rung: number, highFidelity: boolean): number {
-  const base = rung <= 400 ? 60_000 : rung <= 800 ? 180_000 : rung <= 1600 ? 500_000 : 900_000;
-  return highFidelity ? base * 2 : base;
+export function budgetFor(rung: number): number {
+  return rung <= 400 ? 60_000 : rung <= 800 ? 180_000 : rung <= 1600 ? 500_000 : 900_000;
 }
 
 /**
- * Rung 3 is encoded HIGHER than the rest, deliberately: originals are not stored, so it is
- * the master any future re-encode would have to start from. Bought insurance — do not
+ * The top rung is encoded HIGHER than the rest, deliberately: originals are not stored, so
+ * it is the master any future re-encode would have to start from. Bought insurance — do not
  * normalise it. See IMAGE_PIPELINE.md.
  *
- * High fidelity raises the STARTING quality, not only the budget. Raising the budget alone
- * was tried and is a no-op for most photographs: the search only steps quality DOWN when a
- * file is over budget, so an image that already fit came out byte-identical and the
- * checkbox visibly did nothing.
+ * There is no longer a "high fidelity" variant of these numbers. It was the per-image
+ * quality lever, and "No compression" replaced it by being the complete version of the same
+ * idea: the original, untouched, at any size. See docs/decisions/TUNING_LOG.md.
  */
-export function startingQuality(rung: number, highFidelity: boolean): number {
+export function startingQuality(rung: number): number {
   const isTopRung = rung === VARIANT_WIDTHS[VARIANT_WIDTHS.length - 1];
-  if (highFidelity) return isTopRung ? 0.97 : 0.95;
   return isTopRung ? 0.92 : 0.86;
 }
 
@@ -53,6 +50,24 @@ export const QUALITY_FLOOR = 0.62;
 
 /** How far the quality search steps down per attempt. */
 export const QUALITY_STEP = 0.06;
+
+/**
+ * Size of the throwaway canvas the encoder is probed with, before any real work.
+ *
+ * Big enough that a quality setting has something to act on — a 1x1 canvas encodes to the
+ * same handful of header bytes at every quality, which would make the probe answer "quality
+ * does nothing" for a perfectly good encoder.
+ */
+export const PROBE_SIZE = 128;
+
+/**
+ * How much smaller a low-quality encode must be before we believe the quality knob works.
+ *
+ * `quality: 0.2` on noise should land far under `quality: 0.9`. An encoder that returns the
+ * same bytes for both is ignoring the parameter, and every byte budget downstream is then a
+ * wish. 0.9 is deliberately generous: this is a smoke test, not a benchmark.
+ */
+export const PROBE_QUALITY_RATIO = 0.9;
 
 /**
  * How much of an encoded file to read back when looking for its lossless alpha plane.
