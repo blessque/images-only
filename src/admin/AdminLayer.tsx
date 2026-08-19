@@ -516,9 +516,6 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
         <button type="button" onClick={downloadEverything} disabled={downloading !== null}>
           {downloading === null ? 'Download everything' : `Downloading ${downloading}`}
         </button>
-        <a className="admin-help" href="/help" target="_blank" rel="noopener">
-          Help
-        </a>
         <span className="admin-hint">
           Click an image, then ← → to reorder. Reloading the page locks it again.
         </span>

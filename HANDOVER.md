@@ -110,8 +110,8 @@ changing it later breaks every link he has shared.
 
 ## Then hand him three things
 
-1. **The Help page** — `https://his-site/help`, also linked in the admin bar. Tell him to
-   bookmark it. It is written for him, not for a developer.
+1. **The Help page** — `https://his-site/help`. Tell him to bookmark it: it is reachable by
+   URL only, since the admin bar no longer links to it. Written for him, not for a developer.
 2. **`docs/RUNBOOK.md`** — for whoever helps him one day. That may not be you.
 3. **This sentence:** *"If this ever breaks and I am not around, give a developer the
    repository link and `docs/RUNBOOK.md`."*
