@@ -55,6 +55,15 @@ export const QUALITY_FLOOR = 0.62;
 export const QUALITY_STEP = 0.06;
 
 /**
+ * How much of an encoded file to read back when looking for its lossless alpha plane.
+ *
+ * `ALPH` sits ahead of the image data — after `VP8X` (18 bytes) and any colour profile
+ * (~528) — so a few KB always covers it, and reading the head instead of the whole blob
+ * keeps the budget check off the wrong side of a megabyte-sized copy per attempt.
+ */
+export const ALPHA_HEAD_BYTES = 4096;
+
+/**
  * Workers KV's free-tier write budget, per UTC day.
  *
  * Each variant is one write, so 200 photographs at four rungs is 800 — a full first upload

@@ -214,10 +214,17 @@ async function main() {
     );
     console.log(`  · ${sizes.map((s) => `${s.before}→${s.after} ${s.saved}`).join('  |  ')}`);
     // Every file must shrink — but ">50% always" is not a real invariant. The swatch is a
-    // solid colour: an 11KB PNG that is already near-optimally compressed has nothing to
-    // give, and 8KB across FOUR rungs is ~2KB each, which is correct. Only sources with
-    // actual photographic content can be held to the halving bar.
-    const parsePercent = (saved) => Number(saved.replace(/[−%]/g, ''));
+    // solid colour: an 11KB PNG that is already near-optimally compressed has nothing left
+    // to give. Only sources with actual photographic content can be held to the halving bar.
+    //
+    // The figures are source -> LARGEST RUNG, which is what one visitor downloads at most.
+    // They used to be source -> the sum of all four rungs, a number nobody ever downloads,
+    // which reported honest compressions as 2-5x gains in weight.
+    const parsePercent = (saved) => {
+      const value = Number(saved.replace(/[−+%]/g, ''));
+      // '+20%' means it came out BIGGER. Stripping the sign made a growth read as a saving.
+      return saved.startsWith('+') ? -value : value;
+    };
     const parseBytes = (text) => {
       const value = Number.parseFloat(text);
       return text.includes('MB') ? value * 1024 * 1024 : text.includes('KB') ? value * 1024 : value;
@@ -233,7 +240,7 @@ async function main() {
       compressed
         .filter((s) => parseBytes(s.before) > 100 * 1024)
         .every((s) => parsePercent(s.saved) > 50),
-      'photographic sources shrink by more than half across the whole ladder',
+      'photographic sources more than halve at the largest rung a visitor can be served',
     );
     check(
       sizes[0]?.alt === 'Sunrise over the bay',

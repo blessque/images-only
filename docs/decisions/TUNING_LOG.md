@@ -780,6 +780,73 @@ deploy button has moved *backwards*, from "described as working" to "known broke
 
 ---
 
+## Decisions made — 2026-08-19 (iteration 17: the tray reported a weight nobody downloads)
+
+### The "after" figure is the LARGEST RUNG, never the sum of the ladder
+
+Reported from the test deploy as *"some images become 2x or even 5x of weight after
+upload"* — `906 KB → 5.7 MB`, `157 KB → 1.9 MB`. Half of that was arithmetic. The tray set
+`compressedBytes` to `totalBytes(variants)`, the sum of all four rungs, and compared it
+against **one** source file. `srcset` hands a browser exactly one rung, so the sum is a
+number no visitor has ever downloaded; comparing four files against one made every honest
+compression read as a gain in weight. A correct `526 KB → 240 KB` printed as `526 KB → 746 KB`.
+
+`deliveredBytes` is now the largest rung — the most any one visitor can be asked for, and
+also the de-facto master, since originals are not stored. Rejected: the *typical* rung, which
+is the friendliest number and a guess (it depends on viewport and size class), and
+source-vs-total with a relabel, which keeps a figure that answers no question anyone has.
+
+The sign was hardcoded as `−` in the markup, so a growth arrived on screen as `−-548%`.
+`savedLabel` signs it, and a row that grew is drawn in the existing error red rather than the
+green of a win. No new colour.
+
+### The byte budget must not count bytes the quality knob cannot reach
+
+The other half was real, and worse. A lossy WebP with transparency is two things in one file:
+a lossy picture (`VP8 `) and a **lossless alpha plane** (`ALPH`). Quality governs the first
+and has *no effect whatsoever* on the second. Measured, one 2400x1600 image, Chrome:
+
+| | q=0.92 | q=0.80 | q=0.62 (floor) |
+|---|---|---|---|
+| `ALPH` chunk | 2,963,776 | 2,963,776 | 2,963,776 |
+| picture | 1,614,400 | 950,144 | 637,306 |
+
+The alpha plane is **identical to the byte** at every quality. So `encodeWithinBudget` saw a
+file four times over budget, spent every step it had, destroyed a megabyte of *picture*
+quality, and finished still four times over — chasing bytes it could not move. On a
+photographer's portfolio that is the expensive direction to be wrong in.
+
+The budget now governs `blob.size − alphaBytes(head)`. This is the honest form of "raise the
+budget for transparency": it raises it by **exactly** the alpha overhead, measured per file,
+rather than by an invented multiplier. `webp.ts` reads the first 4KB of each encode to find
+the chunk; a head too short, or bytes that are not a WebP, report 0 and the whole file is
+budgeted, which is precisely the old behaviour. Opaque photographs are untouched — Chrome
+emits **no `ALPH` chunk at all** when every pixel is opaque, confirmed by re-running four
+real photographs through the worker before and after: byte-identical ladders.
+
+### Transparency is KEPT, and that costs — the user's call, made with the numbers in hand
+
+The alternative was compositing onto black before encoding. It is **pixel-identical to what
+the site already shows** (the page is black and full-bleed, so transparency renders as black
+anyway) and it takes the same top rung from 3.60 MB to 538 KB. It was declined, deliberately:
+originals are not stored, so flattening is a one-way door on his photographs.
+
+The consequence, stated plainly so nobody rediscovers it as a bug: **an image with a soft or
+photographic alpha mask stays several times heavier than everything else, and is now slightly
+heavier than before** (2.44 MB → 2.79 MB on the 2400 rung of the synthetic case) because the
+pointless quality crush no longer happens. A clean cutout costs **3,096 bytes** of alpha and
+is a non-issue; only gradient masks are expensive. If the weight ever matters more than the
+transparency, the lever is compositing at `downscale`, and the numbers above are the trade.
+
+### `parsePercent` in `verify-admin.mjs` stripped the sign
+
+It did `saved.replace(/[−%]/g, '')`, so the moment a growth could print as `+20%` the
+verifier read it as a 20% *saving* and the "every compressed file shrinks" check passed on
+exactly the failure it exists to catch. Fixed alongside, because a test that cannot fail is
+worse than no test.
+
+---
+
 ## Open issues
 
 - **The deploy button reaches the Git-account screen, but nobody has completed a deploy

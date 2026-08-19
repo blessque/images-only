@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { SIZE_CLASSES, type SizeClass } from '@/lib/types';
-import { canPassThrough, formatBytes, type StagedFile } from './staging';
+import { canPassThrough, formatBytes, savedLabel, type StagedFile } from './staging';
 import { DAILY_WRITE_BUDGET } from './compressParams';
 
 interface UploadTrayProps {
@@ -17,11 +17,6 @@ interface UploadTrayProps {
   onRemove: (jobId: string) => void;
   onPublish: () => void;
   onCancel: () => void;
-}
-
-function savedPercent(file: StagedFile): number {
-  if (file.sourceBytes === 0 || file.compressedBytes === 0) return 0;
-  return Math.round((1 - file.compressedBytes / file.sourceBytes) * 100);
 }
 
 export function UploadTray({
@@ -232,7 +227,19 @@ export function UploadTray({
                   <span className="tray-before">{formatBytes(file.sourceBytes)}</span>
                   <span className="tray-arrow">→</span>
                   <span className="tray-after">{formatBytes(file.compressedBytes)}</span>
-                  <span className="tray-saved">−{savedPercent(file)}%</span>
+                  {/*
+                    Signed inside, because this figure can legitimately go either way — a
+                    source already smaller than the rung it is being compared against comes
+                    out bigger, and that should not arrive dressed in the green of a win.
+                  */}
+                  <span
+                    className={
+                      'tray-saved' +
+                      (file.compressedBytes > file.sourceBytes ? ' is-grown' : '')
+                    }
+                  >
+                    {savedLabel(file.sourceBytes, file.compressedBytes)}
+                  </span>
                 </>
               ) : (
                 <span className="tray-progress">queued</span>

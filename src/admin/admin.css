@@ -250,6 +250,12 @@
   color: #7fa87f;
 }
 
+/* A file that came out bigger. Reuses the error red rather than introducing a fourth
+   colour — it is the same message: this one did not go the way you wanted. */
+.tray-saved.is-grown {
+  color: #d08a8a;
+}
+
 .tray-error {
   color: #d08a8a;
 }

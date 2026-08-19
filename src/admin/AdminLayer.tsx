@@ -10,8 +10,8 @@ import { useCompressor } from './useCompressor';
 import {
   altFromFilename,
   canPassThrough,
+  deliveredBytes,
   isAcceptedImage,
-  totalBytes,
   type StagedFile,
 } from './staging';
 import { formatFor } from './compressParams';
@@ -141,7 +141,10 @@ export default function AdminLayer({ manifest, onManifest, onClose, children }: 
           status: 'ready',
           aspect: outcome.aspect,
           variants: outcome.variants,
-          compressedBytes: totalBytes(outcome.variants),
+          // The largest rung, NOT the sum of the ladder. `srcset` hands a browser exactly
+          // one rung, so the sum is a number nobody ever downloads — comparing it against
+          // one source file reported every honest compression as a 2-5x gain in weight.
+          compressedBytes: deliveredBytes(outcome.variants),
           format: outcome.format,
           rung: null,
         });

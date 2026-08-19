@@ -89,6 +89,18 @@ re-encode), not a fixed magic number: a flat photo and a densely-textured one ne
 quality to hit the same bytes, and a fixed number over-compresses one and wastes bytes on
 the other.
 
+**The search measures only the bytes it can move.** A lossy WebP carrying transparency holds
+a *lossless* alpha plane (the `ALPH` chunk) whose size does not change by one byte between
+quality 0.92 and the floor — measured. Counting it against the budget made the search spend
+every step it had, destroy a megabyte of picture quality, and land just as far over budget as
+it started. So the budget is tested against `blob.size − alphaBytes(head)`; the alpha plane
+costs what it costs. Opaque photographs are unaffected — no `ALPH` chunk is written at all
+when every pixel is opaque. See [TUNING_LOG.md](../decisions/TUNING_LOG.md), iteration 17,
+including the measured price of keeping transparency instead of compositing onto black.
+
+What the upload tray prints as the "after" figure is the **largest rung**, not the sum of the
+ladder. `srcset` hands a browser one rung; the sum is a weight nobody downloads.
+
 ---
 
 ## ONE-WAY DOOR: originals are not stored

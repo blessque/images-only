@@ -10,7 +10,14 @@
  */
 
 import { VARIANT_WIDTHS } from '@/lib/types';
-import { QUALITY_FLOOR, QUALITY_STEP, budgetFor, startingQuality } from './compressParams';
+import {
+  ALPHA_HEAD_BYTES,
+  QUALITY_FLOOR,
+  QUALITY_STEP,
+  budgetFor,
+  startingQuality,
+} from './compressParams';
+import { alphaBytes } from './webp';
 
 export interface CompressRequest {
   jobId: string;
@@ -101,6 +108,20 @@ function downscale(
 }
 
 /**
+ * The bytes the quality search is able to move.
+ *
+ * An image with transparency carries a LOSSLESS alpha plane that does not shrink by one
+ * byte between quality 0.92 and the floor. Counting it against the budget was the bug: the
+ * search saw a file four times over budget, spent every step it had, threw away a megabyte
+ * of PICTURE quality, and finished still four times over — because it was chasing bytes it
+ * could not reach. Budget what is compressible; the alpha plane costs what it costs.
+ */
+async function compressibleBytes(blob: Blob): Promise<number> {
+  const head = await blob.slice(0, ALPHA_HEAD_BYTES).arrayBuffer();
+  return blob.size - alphaBytes(head);
+}
+
+/**
  * Meet the budget by SEARCHING quality, not by picking a fixed number: a flat sky and a
  * densely textured street need different quality to land on the same byte count, and one
  * fixed value over-compresses the first and wastes bytes on the second.
@@ -116,7 +137,7 @@ async function encodeWithinBudget(
   let quality = startingQuality(rung, highFidelity);
   let blob = await canvas.convertToBlob({ type: 'image/webp', quality });
 
-  while (blob.size > budget && quality > QUALITY_FLOOR) {
+  while ((await compressibleBytes(blob)) > budget && quality > QUALITY_FLOOR) {
     quality = Math.max(QUALITY_FLOOR, quality - QUALITY_STEP);
     blob = await canvas.convertToBlob({ type: 'image/webp', quality });
   }

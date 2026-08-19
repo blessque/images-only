@@ -51,8 +51,40 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Everything the ladder will write to storage. One write per variant, so also the write count. */
 export function totalBytes(variants: VariantResult[]): number {
   return variants.reduce((sum, variant) => sum + variant.blob.size, 0);
+}
+
+/**
+ * What one visitor actually downloads, worst case: the largest rung.
+ *
+ * This is the number the tray compares against the source, and it replaced the SUM of the
+ * ladder, which was never a thing anyone downloads — `srcset` hands a browser exactly one
+ * rung. Comparing four files against one made every honest compression read as a 2-5x gain
+ * in weight and made the pipeline look broken when it was not. See TUNING_LOG.md.
+ *
+ * The largest rung is also the de-facto master (originals are not stored), so it is the
+ * conservative choice in both directions: it never flatters the compression, and it is what
+ * a retina screen showing a `solo` image is served.
+ */
+export function deliveredBytes(variants: VariantResult[]): number {
+  let top: VariantResult | null = null;
+  for (const variant of variants) if (!top || variant.rung >= top.rung) top = variant;
+  return top ? top.blob.size : 0;
+}
+
+/**
+ * The saving, signed honestly.
+ *
+ * The sign used to be a '−' hardcoded in the markup, so the growth this function now has to
+ * express arrived on screen as '−-548%'. If a file comes out bigger, say so.
+ */
+export function savedLabel(sourceBytes: number, afterBytes: number): string {
+  if (sourceBytes === 0 || afterBytes === 0) return '';
+  const percent = Math.round((1 - afterBytes / sourceBytes) * 100);
+  if (percent === 0) return '0%';
+  return percent > 0 ? `−${percent}%` : `+${-percent}%`;
 }
 
 /**
