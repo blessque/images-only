@@ -11,7 +11,7 @@ wrong answer for him, even when it is right for you. Everything he needs day to 
 
 ---
 
-## The four pathways
+## The five pathways
 
 | | Host | Admin panel | Who must be technical | Cost |
 |---|---|---|---|---|
@@ -19,12 +19,20 @@ wrong answer for him, even when it is right for you. Everything he needs day to 
 | **B** | Cloudflare + R2 | yes | you, once | $5/mo + a working card |
 | **C** | VPS — Node, SQLite, files | yes | **someone, forever** | ~200–500₽/mo |
 | **D** | Static freeze — any host | no | nobody | ~0 |
+| **E** | Shared hosting — PHP, MySQL | yes | **your host's support desk** | ~200–300₽/mo |
 
-**A is the home. D is the parachute. C is for reachability, not cost.**
+**A is the home. D is the parachute. E is the answer for a Russian audience. C is for
+reachability, not cost.**
 
 C is an *upgrade* in technical burden, not a safety net: a server to patch, a certificate to
 renew, a process that dies at 3am. Take it only when visitors genuinely cannot reach
-Cloudflare. Where nobody will own that permanently, D is the honest answer.
+Cloudflare and nobody else will host it. Where nobody will own that permanently, E or D.
+
+**E is the one people reach for last and should reach for first** when Cloudflare is the
+problem. It is the only row where the technical burden belongs to somebody who is already
+paid to carry it — the hosting support desk installs it, patches the machine and renews the
+certificate, and the owner still drags photographs onto his own page. Handyhost, Beget,
+Timeweb, reg.ru and Hostinger all qualify. See `php/README.md`.
 
 ---
 

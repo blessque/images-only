@@ -1,0 +1,73 @@
+name: Package for shared hosting
+
+# Builds `php-site.zip` — the folder you upload to ordinary PHP hosting.
+#
+# This workflow exists because a repository link is NOT enough on its own: the client is a
+# Vite build, `dist/` is gitignored, and "Download ZIP" on GitHub gives you TypeScript
+# sources. The person this pathway is for cannot run `npm install`, and neither can their
+# hosting support desk. So CI runs the build and attaches the result to a Release, where it
+# downloads with one click and no GitHub account.
+#
+# Needs no secrets, so unlike deploy.yml it cannot fail for want of configuration — an
+# always-red badge trains people to ignore the one signal that is supposed to mean something.
+
+on:
+  push:
+    tags: ['v*'] # a tag publishes a Release with the zip attached
+  workflow_dispatch: # or build one from the Actions tab without publishing
+  pull_request:
+    paths: ['php/**', 'src/**', 'scripts/build-php.mjs'] # prove it still packages
+
+permissions:
+  contents: write # required to create a Release; nothing else
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The PHP port's own suites need php and mysql, which this runner has no reason to
+      # provide. What matters before shipping a package is that the client builds and the
+      # shared logic still holds.
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm run build
+      - run: npm run build:php
+
+      # Zipped from INSIDE php-site so the archive opens as the files themselves, not as one
+      # folder the owner then has to look inside. Uploading "the contents of this folder" is
+      # the instruction, and the archive should match it.
+      - name: Make the archive
+        run: cd php-site && zip -r ../php-site.zip . -x '.DS_Store'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: php-site
+          path: php-site.zip
+
+      - name: Attach it to the Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: php-site.zip
+          # Links resolve against the TAG, not against main. A release can be cut from a
+          # branch before it merges, and a link to main would 404 for exactly the person
+          # least equipped to work out why.
+          body: |
+            **Установка на обычный хостинг —** скачайте `php-site.zip` ниже.
+
+            Инструкция: [УСТАНОВКА.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/УСТАНОВКА.md)
+
+            ---
+
+            **Shared hosting —** download `php-site.zip` below.
+            Instructions: [php/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/php/README.md)

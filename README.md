@@ -37,15 +37,25 @@ No credit card. Room for about **600 photographs**. Nothing to maintain, ever.
 Press it twice and you have two separate sites.
 
 
-### 2. Shared hosting — the folder one
+### 2. Shared hosting — the ordinary one
 
-If you already pay for ordinary hosting, or Cloudflare is awkward where you live: upload one
-folder, then **drop photographs into `photos/` by FTP** and they appear.
+If you already pay for ordinary hosting, or Cloudflare is awkward where you live. Upload one
+folder; the site runs on PHP like any other. It comes in two grades, and you can start with
+the first and move to the second whenever.
 
-Name files `01-...`, `02-...` to order them. End a name with `-solo` to give a photo a whole
-row. Edit `site.txt` for your name and contact.
+**The simple grade — no database, no password.** Drop photographs into `photos/` by FTP and
+they appear. Name files `01-...`, `02-...` to order them, end a name with `-solo` to give a
+photo a whole row, edit `site.txt` for your name and contact.
 
-Works on Beget, Timeweb, Hostinger, reg.ru — anything with PHP 8. See **[php/](php/)**.
+**The full grade — the same site you get on Cloudflare.** Create a MySQL database in your
+hosting panel, open `install.php` once, and you have the admin panel: drag photographs onto
+the page, reorder them, edit captions, undo. Photographs are still shrunk in your browser
+before they upload, so this is not slower for having a database behind it.
+
+Works on Handyhost, Beget, Timeweb, Hostinger, reg.ru — anything with PHP 8 and MySQL.
+
+**Ставить будете вы → [УСТАНОВКА.md](УСТАНОВКА.md)** — пять шагов, с готовым письмом для
+поддержки хостинга. Technical detail in **[php/](php/)**.
 
 ### 3. Frozen files — the one that cannot break
 
@@ -71,6 +81,7 @@ Four steps, no code — see `docs/RUNBOOK.md`.
 - **You just want a portfolio online** → 1
 - **You already pay for hosting** → 2
 - **You are in Russia and want to pay in roubles** → 2, or 3 on Yandex Object Storage
+- **Your visitors are in Russia** → 2. Cloudflare is throttled there; see the risks below.
 - **You post twice a year** → 3
 - **You have thousands of photos** → 5
 - **You are an engineer with opinions** → 4
