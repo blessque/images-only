@@ -1,12 +1,21 @@
 # Send everything that is not a real file to index.php.
 #
 # `assets/` and anything else on disk is served straight by Apache, which is what you want:
-# those are hashed and immutable. `/` and `/img/...` are not files, so they reach PHP.
+# those are hashed and immutable. `/`, `/api/...` and `/img/...` are not files, so they
+# reach PHP.
 
 DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
+
+  # Apache does not pass the Authorization header to PHP, so without this line every write
+  # request arrives looking logged-out and the admin panel 401s on save with nothing in the
+  # error log to explain it. CGI and FastCGI both need it; mod_php does not, and it is
+  # harmless there. See bearer_from_request() in lib/auth.php.
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^ index.php [L]
 </IfModule>
@@ -18,10 +27,27 @@ DirectoryIndex index.php
   </FilesMatch>
 </IfModule>
 
-# Your photographs are the originals. They are reachable through /img/ in resized form;
-# there is no reason to also serve the full-size folder directly.
+# Dotfiles, and the two files that must never be readable over HTTP.
+#
+# config.php holds the database password. It is a .php file, so a working server executes it
+# and returns nothing — but a server with PHP misconfigured serves it as text, and that is
+# precisely the moment you want a second lock. schema.sql is harmless and denied for tidiness.
 <IfModule mod_authz_core.c>
-  <FilesMatch "^\.">
+  <FilesMatch "^\.|^config\.php$|^schema\.sql$">
     Require all denied
   </FilesMatch>
+</IfModule>
+
+# lib/ is included by index.php, never requested directly. Requesting one of those files on
+# its own runs it outside its dependencies, which at best is a blank page and at worst is a
+# PHP error naming your filesystem paths.
+<IfModule mod_rewrite.c>
+  RewriteRule ^lib/ - [F,L]
+</IfModule>
+
+# Uploaded variants are reachable through /img/{id}/{size}.webp, which sets the immutable
+# cache header. Serving the same bytes at a second URL without those headers means a visitor
+# can cache the wrong thing, so there is exactly one way in.
+<IfModule mod_rewrite.c>
+  RewriteRule ^uploads/ - [F,L]
 </IfModule>

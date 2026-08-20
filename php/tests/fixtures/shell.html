@@ -1,0 +1,12 @@
+<!doctype html>
+<!-- Minimal stand-in for dist/index.html: the only thing serve_shell needs is the manifest
+     placeholder it substitutes into. Using the real build here would make the test depend on
+     `npm run build` having run, which is a dependency a security test does not want. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>fixture</title>
+    <script type="application/json" id="manifest"></script>
+  </head>
+  <body></body>
+</html>
