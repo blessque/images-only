@@ -49,3 +49,5 @@ memory/
 
 # Shared-hosting bundle — build output
 /php-site/
+# The packaged archive CI attaches to a Release. Built, never committed.
+/php-site.zip

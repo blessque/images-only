@@ -53,7 +53,9 @@ the page, reorder them, edit captions, undo. Photographs are still shrunk in you
 before they upload, so this is not slower for having a database behind it.
 
 Works on Handyhost, Beget, Timeweb, Hostinger, reg.ru — anything with PHP 8 and MySQL.
-See **[php/](php/)**.
+
+**Ставить будете вы → [УСТАНОВКА.md](УСТАНОВКА.md)** — пять шагов, с готовым письмом для
+поддержки хостинга. Technical detail in **[php/](php/)**.
 
 ### 3. Frozen files — the one that cannot break
 
