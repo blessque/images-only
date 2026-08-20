@@ -59,12 +59,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: php-site.zip
+          # Links resolve against the TAG, not against main. A release can be cut from a
+          # branch before it merges, and a link to main would 404 for exactly the person
+          # least equipped to work out why.
           body: |
             **Установка на обычный хостинг —** скачайте `php-site.zip` ниже.
 
-            Инструкция: [УСТАНОВКА.md](https://github.com/${{ github.repository }}/blob/main/УСТАНОВКА.md)
+            Инструкция: [УСТАНОВКА.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/УСТАНОВКА.md)
 
             ---
 
             **Shared hosting —** download `php-site.zip` below.
-            Instructions: [php/README.md](https://github.com/${{ github.repository }}/blob/main/php/README.md)
+            Instructions: [php/README.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/php/README.md)
