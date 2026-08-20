@@ -89,13 +89,23 @@ function db(): PDO
  *
  * Split on `;` at end of line: the schema is ours, contains no stored routines and no
  * semicolons inside string literals, so a full SQL parser would be weight for nothing.
+ *
+ * Comment LINES are stripped from each statement rather than statements that begin with a
+ * comment being skipped. The difference is not cosmetic: every table here is preceded by an
+ * explanatory block, so skipping meant `images` and `auth` were silently never created and
+ * the site installed itself into a database missing half its tables.
  */
 function install_schema(PDO $pdo): void
 {
     $sql = (string) file_get_contents(dirname(__DIR__) . '/schema.sql');
-    foreach (preg_split('/;\s*$/m', $sql) ?: [] as $statement) {
-        $statement = trim($statement);
-        if ($statement !== '' && !str_starts_with($statement, '--')) {
+
+    foreach (preg_split('/;\s*$/m', $sql) ?: [] as $chunk) {
+        $lines = array_filter(
+            explode("\n", $chunk),
+            fn(string $line) => !str_starts_with(ltrim($line), '--'),
+        );
+        $statement = trim(implode("\n", $lines));
+        if ($statement !== '') {
             $pdo->exec($statement);
         }
     }

@@ -95,18 +95,27 @@ try {
 
   mysql(`DROP DATABASE IF EXISTS \`${db.name}\`; CREATE DATABASE \`${db.name}\``);
 
+  // PHP array syntax, not JSON with the quotes swapped — `{'host': 'x'}` is a JS object
+  // literal and a PHP parse error, which surfaces as an unreadable wall of bytes.
+  const phpValue = (value) =>
+    typeof value === 'number' ? String(value) : `'${String(value).replace(/['\\]/g, '\\$&')}'`;
   writeFileSync(
     path.join(workspace, 'config.php'),
-    `<?php return ${JSON.stringify({ ...db }).replace(/"/g, "'")};\n`,
+    `<?php return [${Object.entries(db)
+      .map(([key, value]) => `'${key}' => ${phpValue(value)}`)
+      .join(', ')}];\n`,
   );
 
   // The PHP built-in server has no .htaccess, so a router script does the rewriting: real
   // files served as-is, everything else to index.php. That is what Apache's rules amount to.
+  // Any real file is handed back to the built-in server, which serves static assets as-is
+  // and EXECUTES .php ones — that is what Apache does, and it is how install.php gets to run
+  // instead of being swallowed by the catch-all. Everything else goes to index.php.
   writeFileSync(
     path.join(workspace, 'router.php'),
     `<?php
      $file = __DIR__ . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-     if (is_file($file) && !str_ends_with($file, '.php')) return false;
+     if (is_file($file)) return false;
      require __DIR__ . '/index.php';\n`,
   );
 
@@ -250,7 +259,13 @@ try {
   check('the shell renders', response.status === 200 && response.text.includes('id="manifest"'));
   check('the manifest is inlined into it', response.text.includes('"sizeClass":"solo"'));
   check('cyrillic alt text survives', response.text.includes('Тест'));
-  check('a script tag in alt text is escaped', !response.text.includes('<script>Тест') && response.text.includes('\\u003c'));
+  // Case-insensitive on purpose: PHP's JSON_HEX_TAG emits < and JS's JSON.stringify
+  // emits <. Both parse to the same character, so asserting one spelling tests the
+  // encoder's taste rather than the security property. The property is that the raw tag is
+  // not in the document.
+  const manifestJson = /id="manifest">(.*?)<\/script>/s.exec(response.text)?.[1] ?? '';
+  check('a script tag in alt text is escaped', !manifestJson.includes('<script'));
+  check('and it is escaped as a unicode entity', /\\u003c/i.test(manifestJson));
 
   // ── Soft delete and undo ───────────────────────────────────────────────────────────────
 

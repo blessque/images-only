@@ -24,10 +24,18 @@ const IMMUTABLE = 'public, max-age=31536000, immutable';
  * A passthrough is the SOURCE bytes, so it is whatever the designer dropped in — serving a
  * JPEG under image/webp would be a lie the browser mostly tolerates and some tools do not.
  */
+/**
+ * EXACTLY the Worker's list, and `jpeg` is deliberately absent.
+ *
+ * `formatFor` in src/admin/compressParams.ts normalises jpeg to jpg before it ever reaches an
+ * API, so the client cannot send it. Accepting it here anyway would let PHP store a row whose
+ * `format` the Worker's own validation rejects — an image that serves on shared hosting and
+ * 400s the moment the gallery is imported into Cloudflare. Folder mode still READS .jpeg
+ * files; it normalises the extension when it builds the manifest. See lib/folder.php.
+ */
 const PASSTHROUGH_TYPES = [
     'webp' => 'image/webp',
     'jpg' => 'image/jpeg',
-    'jpeg' => 'image/jpeg',
     'png' => 'image/png',
     'avif' => 'image/avif',
     'gif' => 'image/gif',

@@ -22,6 +22,16 @@ const SITE_FILE  = __DIR__ . '/../site.txt';   // line 1: your name. line 2: you
 /** Below this a photograph is served untouched — re-encoding it would only lose quality. */
 const PASSTHROUGH_MAX_BYTES = 150000;
 
+/**
+ * Extensions we will READ off the disk, which is a wider set than the ones we serve under.
+ *
+ * `.jpeg` belongs here and not in PASSTHROUGH_TYPES: people name files that way, so ignoring
+ * them would silently drop photographs from the gallery — but `format` is normalised to `jpg`
+ * when the manifest is built, because that is the only spelling the Worker accepts and a
+ * gallery has to be able to move. See lib/http.php.
+ */
+const SOURCE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'];
+
 /** The top rung is the master you keep, so it is encoded better than the rest. */
 const QUALITY = 82;
 const QUALITY_TOP = 90;
@@ -104,7 +114,7 @@ function list_photos(): array
         if ($file[0] === '.') {
             continue;
         }
-        if (array_key_exists(strtolower((string) pathinfo($file, PATHINFO_EXTENSION)), PASSTHROUGH_TYPES)) {
+        if (in_array(strtolower((string) pathinfo($file, PATHINFO_EXTENSION)), SOURCE_EXTENSIONS, true)) {
             $files[] = $file;
         }
     }
