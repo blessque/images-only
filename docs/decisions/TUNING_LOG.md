@@ -969,8 +969,96 @@ again: `srcSetFor` takes the suffix now, and it is four unit tests instead of a 
 
 ---
 
+## Decisions made — 2026-08-20 (iteration 19: shared hosting grew an admin panel)
+
+### The table said shared hosting could not have drag-and-drop. That was wrong.
+
+Stated as a property of *shared hosting* when it was a property of **one file**: the original
+`php/index.php` was deliberately read-only and FTP-driven. Aegea has run an admin panel with
+image upload on exactly this hosting for years, which is the standing counter-example.
+
+The correction is worth keeping because of how the error was made: a limitation of the
+current implementation was described as a limitation of the platform, and the fix was already
+implied by the architecture — the client talks to eleven HTTP routes and does not care what
+answers them.
+
+### Compression needed no work at all, and that is the architecture paying out
+
+It runs in the browser, in a Web Worker, before a byte is uploaded. Every deployment target
+gets it free; folder mode resizes with GD only because FTP has no browser in it. The same
+holds for the grid, the admin bar, undo and soft delete — all client-side and server-agnostic.
+
+**What was actually missing was ~600 lines of PHP answering the same routes.** `src/` is
+unmodified.
+
+### MySQL, not SQLite — and the difference is not cosmetic
+
+Handyhost support confirmed (2026-08-20): PHP up to 8.3, MySQL only on shared hosting, 5
+databases, `.htaccess` and `mod_rewrite` work, folders can be made writable, upload limits
+raisable to 256M. SQLite was the preferred design and is simply not on offer.
+
+Three translations that would be silent bugs if missed:
+
+- **`CHECK` is ignored by MySQL 5.7.** `size_class` uses an ENUM instead, so the constraint
+  is still enforced by the database rather than by hope. `CHECK (id = 1)` on `auth` becomes a
+  PRIMARY KEY, which makes "claimed exactly once" an invariant on every MySQL version.
+- **`key` and `value` are reserved words.** `settings` and `login_attempts` use different
+  column names. Invisible outside `schema.sql` — export/import speaks HTTP.
+- **No partial indexes**, so `images_live_order` leads with `deleted_at`.
+
+### PBKDF2 stays at 100,000 iterations even though PHP could do 600,000
+
+The Workers runtime hard-caps there and *throws* above it. A stronger hash in PHP is one
+Cloudflare cannot verify, which would silently break moving a gallery between pathways — the
+one thing the shared credential format exists to allow. The cap travels with the format.
+
+### An installer page, not "edit config.php over FTP"
+
+Editing a config file in a text editor is the step where a non-technical owner stops. It is
+the terminal rule wearing different clothes, and it is why WordPress and Aegea both ship an
+installer. `install.php` collects the four values the hosting panel shows, tests the
+connection **before** writing anything (a written config pointing at a dead database leaves
+the site blank with no way back — folder mode at least still renders), creates the tables,
+sets the password, then refuses to run again.
+
+### The install sheet is addressed to the support engineer, not the owner
+
+From the user: his Aegea install on Handyhost took a support engineer because the instructions
+were too technical, **and it has run for three years since**. That is the model working, not
+failing — shared hosting comes with a desk that does this daily. So
+`INSTALL-FOR-SUPPORT.txt` ships in the package, Russian first, written in the vocabulary a
+hosting tech already uses. The owner forwards it and never reads it.
+
+### `full.[a-z0-9]{1,5}` accepts `full.php`
+
+Caught by the test suite, not by review — the pattern reads like "a file extension" and it is,
+including the one that executes. On shared hosting that is arbitrary code in the web root,
+reachable by an authenticated upload. Now a whitelist of the formats actually served, with
+four regression tests. Rungs are checked against the ladder for the same reason.
+
+**Method note:** this is the fourth time a foreign tool found what inspection did not. The
+test was written to prove cross-runtime hash compatibility and caught an unrelated hole on
+the way past.
+
+### Rate limiting keys on `REMOTE_ADDR`, not `X-Forwarded-For`
+
+`clientKey` in the Worker reads `CF-Connecting-IP`, which cannot be spoofed at the edge.
+Shared hosting has no such guarantee: `X-Forwarded-For` is an ordinary request header, so
+trusting it lets an attacker send a fresh one per guess and hold the counter at one for ever.
+The cost is that a shared NAT shares a bucket — 8 attempts per 15 minutes on a single-user
+site, which is a cost worth paying.
+
+---
+
 ## Open issues
 
+- **Folder mode's GD path is still unexecuted.** `resize_to`, `imagewebp` and the
+  animated-GIF probe in `lib/folder.php` carry over unchanged from the original and no test
+  drives them; `verify:php:api` covers managed mode only. Apache is emulated by a router
+  script, so `.htaccess` — including the `Authorization` passthrough that login depends on —
+  has never run under real Apache. Both want one pass on a real host.
+- **Nothing has been deployed to Handyhost yet.** The environment is confirmed by support and
+  the code is tested locally; the install itself is unwalked.
 - **The deploy button reaches the Git-account screen, but nobody has completed a deploy
   through it.** Verified 2026-08-19 only as far as the setup form — the parse failure is
   gone. The resource-provisioning and first-boot half is still unwalked; the first person to
@@ -1002,11 +1090,12 @@ again: `srcSetFor` takes the suffix now, and it is four unit tests instead of a 
 - **The gallery is empty in production.** `export/` holds a test set (Unsplash, ChatGPT
   images, a real phone number in `settings`) and is deliberately **not** imported. The real
   photographs go in by drag-and-drop.
-- **`php/index.php` has never been executed.** No PHP and no container runtime on the dev
-  machine, so alone among the five pathways it is reviewed rather than run — every other one
-  has a `verify:*` script that executes it. Install PHP 8 and drive it against real
-  photographs before anyone deploys it; the likely failure points are GD availability,
-  `imagewebp`, and the `.htaccess` rewrite on a host that ignores `DirectoryIndex`.
+- **The PHP pathway now runs, but folder mode is still only partly exercised.** PHP 8.5 is
+  installed and `npm run verify:php` / `verify:php:api` drive managed mode over HTTP against
+  a real MySQL. What no test covers is **GD**: `resize_to`, `imagewebp` and the animated-GIF
+  detection in `lib/folder.php` are unchanged from the never-executed original, and the
+  `.htaccess` rewrite is emulated by a router script rather than tested on Apache. Drive
+  folder mode against real photographs on a real host before relying on it.
 - **The live site still runs on Worker secrets**, not the claim flow. Intended — the fallback
   exists for exactly this — but a clean handover means the owner deploys fresh from the button
   into his own account and the old Worker is deleted. See `HANDOVER.md`.

@@ -126,9 +126,14 @@ changing it later breaks every link he has shared.
   larger ones lose their animation.
 - **If he forgets the password**, the Help page has the four clicks that replace it. He does
   not need a terminal and he does not need you.
-- **If Cloudflare becomes unreachable** — a real possibility for a Russian audience — there
-  are two tested ways out, both in the runbook: `npm run freeze` to plain files, or the Node
-  port. Neither loses a photograph.
+- **If Cloudflare becomes unreachable** — a real possibility for a Russian audience, and as
+  of 2026 an active one — there are three tested ways out, all in the runbook. Neither loses
+  a photograph.
+  - **Ordinary Russian hosting** (`php/`) is the one to reach for. ~200–300₽/mo on Handyhost,
+    Beget or Timeweb; he keeps drag-and-drop and compression, and **the support desk he is
+    already paying does the install** — hand them `INSTALL-FOR-SUPPORT.txt`.
+  - `npm run freeze` to plain files, if he posts rarely and someone will re-freeze for him.
+  - The Node port, only if he needs a machine of his own and someone will run it forever.
 
 ---
 

@@ -162,6 +162,37 @@ is **reachability** — if visitors cannot get to Cloudflare — and not cost, s
 tier is free and needs no card. Where nobody will be that somebody, the honest answer is
 `npm run freeze`.
 
+## Shared hosting — PHP and MySQL
+
+The pathway the docs could not see for two iterations, because every one of them framed the
+choice as "Cloudflare or leaving". **The dividing line is not Cloudflare vs not, it is server
+vs no server**, and ordinary shared hosting is not leaving — it is a different kind of server,
+one where somebody else patches the machine and a support desk answers the phone.
+
+`php/` answers the same eleven routes the Worker does. **`src/` is unmodified**; the client
+talks HTTP and does not know what is on the other end.
+
+- `php/lib/auth.php` — PBKDF2 and HMAC tokens, byte-compatible with `worker/auth.ts`. A
+  password hash written by Cloudflare verifies in PHP **and the reverse**, proven in both
+  directions by `npm run verify:php` using each side's shipping code. That compatibility is
+  what lets a gallery move between the two without the owner choosing a new password.
+- `php/lib/store.php` — the filesystem backend `worker/storage.ts` describes, again two
+  functions.
+- `php/lib/manifest.php` + `php/schema.sql` — the `images` table on MySQL. Shared hosting
+  offers MySQL and not SQLite (confirmed with Handyhost, 2026-08-20), so it is a translation:
+  ENUM instead of CHECK, which 5.7 silently ignores; renamed `key`/`value` columns, which are
+  reserved words; no partial index.
+- `php/install.php` — the one-time setup form. It exists because "edit config.php over FTP"
+  is the step where a non-technical owner stops, which is the terminal rule wearing different
+  clothes.
+
+**Compression is unaffected and needed no work.** It runs in the browser, in a Web Worker,
+before a byte leaves the designer's Mac — the server receives variants that are already
+encoded. Folder mode resizes server-side with GD only because FTP has no browser in it.
+
+Two modes, chosen by whether `config.php` exists: **folder mode** (FTP into `photos/`, no
+database, no password) and **managed mode** (the full admin panel). See `php/README.md`.
+
 ## Freezing it to plain files
 
 `npm run freeze` turns a live gallery into a folder any static host serves — the only
